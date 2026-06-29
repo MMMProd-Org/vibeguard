@@ -14,7 +14,6 @@ TARGET="${1:-$PWD}"
 
 command -v jq  >/dev/null 2>&1 || { echo "vibeguard: jq required (apt/brew install jq)" >&2; exit 1; }
 command -v git >/dev/null 2>&1 || { echo "vibeguard: git required" >&2; exit 1; }
-command -v gh  >/dev/null 2>&1 || echo "vibeguard: WARN gh not found — PR-triage hooks degrade; core guardrails still work." >&2
 [ -d "$TARGET/.git" ] || echo "vibeguard: WARN $TARGET is not a git repo — installing anyway." >&2
 
 # "<hook-file>:<event>:<matcher>"  (matcher may contain | but never :)

@@ -2,8 +2,10 @@
 #
 # .claude/hooks/pre-tool-use-scope.sh — V4.0 (walk-up-tree scope resolution)
 #
-# PreToolUse hook (Edit|Write|NotebookEdit) : refuse toute écriture
-# hors scopePaths. Fail-closed.
+# PreToolUse hook (Edit|Write|NotebookEdit) : bloque les écritures hors du projet.
+# Opt-in par défaut : sans .session-scope.json, les écritures DANS le projet sont
+# autorisées (anti-brick) ; avec un scope file, refuse hors scopePaths. Fail-closed
+# sur hors-projet et sous VIBEGUARD_SCOPE_STRICT=1.
 #
 # V4.0 changes vs V3.2:
 #   LOCK-V4-1 : Walk-up order leaf→root, first .session-scope.json wins
