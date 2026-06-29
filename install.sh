@@ -24,7 +24,7 @@ HOOKS=(
 )
 
 # register_hook <json-file> <command> <event> <matcher>
-# Append-only + idempotent jq merge: never rewrites an existing entry.
+# Append-only + idempotent: rewrites the file only when the merge changes it.
 register_hook() {
   local file="$1" cmd="$2" ev="$3" m="$4" tmp
   tmp="$(mktemp)"
@@ -32,7 +32,8 @@ register_hook() {
     .hooks //= {} | .hooks[$ev] //= [] |
     if ([.hooks[$ev][]?.hooks[]?.command] | any(. == $cmd)) then .
     else .hooks[$ev] += [{matcher:$m, hooks:[{type:"command", command:$cmd}]}] end
-  ' "$file" > "$tmp" && mv "$tmp" "$file"
+  ' "$file" > "$tmp"
+  if cmp -s "$file" "$tmp"; then rm -f "$tmp"; else mv "$tmp" "$file"; fi
 }
 
 mkdir -p "$TARGET/.claude/hooks"
@@ -52,24 +53,28 @@ for spec in "${HOOKS[@]}"; do
   install_file "$VG_SRC/hooks/$f" "$TARGET/.claude/hooks/$f"
 done
 
-# Claude: backup then merge into .claude/settings.json
+# Claude: merge into .claude/settings.json (back up once, only if it changes)
 SETTINGS="$TARGET/.claude/settings.json"
 [ -f "$SETTINGS" ] || echo '{}' > "$SETTINGS"
-cp "$SETTINGS" "$SETTINGS.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"
+SNAP="$(mktemp)"; cp "$SETTINGS" "$SNAP"
 for spec in "${HOOKS[@]}"; do
   f="${spec%%:*}"; rest="${spec#*:}"; event="${rest%%:*}"; matcher="${rest##*:}"
   register_hook "$SETTINGS" 'bash "${CLAUDE_PROJECT_DIR:?CLAUDE_PROJECT_DIR unset}/.claude/hooks/'"$f"'"' "$event" "$matcher"
 done
+cmp -s "$SNAP" "$SETTINGS" || cp "$SNAP" "$SETTINGS.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"
+rm -f "$SNAP"
 
-# Codex: bridge run.sh + backup then merge into .codex/hooks.json
+# Codex: bridge run.sh + merge into .codex/hooks.json (back up once, only if it changes)
 mkdir -p "$TARGET/.codex/hooks"
 install_file "$VG_SRC/codex/run.sh" "$TARGET/.codex/hooks/run.sh"
 CX="$TARGET/.codex/hooks.json"
 [ -f "$CX" ] || echo '{"hooks":{}}' > "$CX"
-cp "$CX" "$CX.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"
+CXSNAP="$(mktemp)"; cp "$CX" "$CXSNAP"
 for spec in "${HOOKS[@]}"; do
   f="${spec%%:*}"; rest="${spec#*:}"; event="${rest%%:*}"; matcher="${rest##*:}"
   register_hook "$CX" "bash .codex/hooks/run.sh $f" "$event" "$matcher"
 done
+cmp -s "$CXSNAP" "$CX" || cp "$CXSNAP" "$CX.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"
+rm -f "$CXSNAP"
 
 echo "vibeguard: installed ${#HOOKS[@]} hook(s) into $TARGET (Claude + Codex). Backups: *.vibeguard-bak.*"

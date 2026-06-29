@@ -28,8 +28,10 @@ ok "$([ -f "$T/.claude/hooks/pre-tool-use-danger.sh" ] && echo yes)" "yes" "dang
 ok "$([ -f "$T/.claude/hooks/pre-tool-use-scope.sh" ] && echo yes)" "yes" "scope hook file copied"
 
 echo "=== idempotence (2e run) ==="
+nbak_before="$(ls "$T/.claude/"settings.json.vibeguard-bak.* 2>/dev/null | wc -l | tr -d ' ')"
 bash "$VG/install.sh" "$T" >/dev/null 2>&1
 ok "$(jq -r '[.hooks.PreToolUse[]?.hooks[]?.command]|map(select(test("block-force-push")))|length' "$T/.claude/settings.json")" "1" "no duplicate after re-run"
+ok "$(ls "$T/.claude/"settings.json.vibeguard-bak.* 2>/dev/null | wc -l | tr -d ' ')" "$nbak_before" "re-run creates no new backup (idempotent)"
 
 echo "=== cross-agent (Codex bridge) ==="
 ok "$([ -x "$T/.codex/hooks/run.sh" ] && echo yes)" "yes" ".codex/hooks/run.sh installed+exec"
