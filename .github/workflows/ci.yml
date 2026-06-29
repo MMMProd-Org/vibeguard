@@ -1,0 +1,41 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    name: tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: install deps (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq shellcheck
+      - name: install deps (macos)
+        if: runner.os == 'macOS'
+        run: brew install jq shellcheck
+      - name: shellcheck
+        run: shellcheck -S warning hooks/*.sh codex/run.sh install.sh scripts/*.sh
+      - name: tests
+        run: |
+          bash tests/test-block-force-push.sh
+          bash tests/test-scope.sh
+          bash tests/test-install-merge.sh
+          bash tests/test-danger.sh
+          bash tests/test-do-release.sh
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks (CLI via docker, no license needed for org repos)
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f detect --source /repo --no-banner
+      - name: trufflehog
+        uses: trufflesecurity/trufflehog@v3.95.7
+        with:
+          path: ./
+          extra_args: --results=verified,unknown
