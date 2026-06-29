@@ -26,7 +26,7 @@ set -euo pipefail
 # Negative guardrail catching dangerous variants of common commands.
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "[block-force-push] BLOCKED : jq absent, hook unreliable" >&2
+  echo "[block-force-push] BLOCKED : jq missing, hook unreliable" >&2
   exit 2
 fi
 

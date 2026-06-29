@@ -6,9 +6,9 @@ set -euo pipefail
 # husky parts of the original are intentionally excluded (shipped separately,
 # opt-in). Exit 0 = allow, 2 = block.
 
-command -v jq >/dev/null 2>&1 || { echo "BLOCKED : jq absent." >&2; exit 2; }
+command -v jq >/dev/null 2>&1 || { echo "BLOCKED : jq missing." >&2; exit 2; }
 INPUT=$(cat)
-CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || { echo "BLOCKED : input JSON invalide." >&2; exit 2; }
+CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || { echo "BLOCKED : invalid input JSON." >&2; exit 2; }
 [ -z "$CMD" ] && exit 0
 
 PATTERNS='git add[[:space:]]+(\.($|[[:space:]/]|&&|;)|\./|-A|--all|--[[:space:]]+\.)|git commit[^|;&]*(--no-verify|[[:space:]]-n([[:space:]]|$))|git push[^|;&]*(--no-verify|--force|--force-with-lease|[[:space:]]-f([[:space:]]|$))|git[[:space:]][^|;&]*-c[[:space:]]+core\.hooksPath=[^|;&]*[[:space:]]push([[:space:]]|$)|HUSKY=0[[:space:]]+git[[:space:]]+push|git clean[[:space:]][^|;&]*(--force|-[A-Za-z]*f[A-Za-z]*)|git reset[[:space:]]+--hard|(^|[^[:alnum:]_-])rm[[:space:]]+([^|;&]*[[:space:]'\''"])?((-[A-Za-z]*[rR][A-Za-z]*f[A-Za-z]*)|(-[A-Za-z]*f[A-Za-z]*[rR][A-Za-z]*)|((--recursive|-[A-Za-z]*[rR][A-Za-z]*)[[:space:]'\''"]([^|;&]*[[:space:]'\''"])?(--force|-[A-Za-z]*f[A-Za-z]*))|((--force|-[A-Za-z]*f[A-Za-z]*)[[:space:]'\''"]([^|;&]*[[:space:]'\''"])?(--recursive|-[A-Za-z]*[rR][A-Za-z]*)))|chmod[[:space:]]+[0-7]?777'
@@ -51,7 +51,7 @@ SCAN_NORM="${SCAN//\\/}"
 SCAN_NORM="${SCAN_NORM//\"/}"
 SCAN_NORM="${SCAN_NORM//\'/}"
 if printf '%s\n' "$SCAN" | grep -qE "$PATTERNS" || printf '%s\n' "$SCAN_NORM" | grep -qE "$PATTERNS"; then
-  echo "BLOCKED : commande dangereuse :" >&2
+  echo "BLOCKED : dangerous command:" >&2
   echo "$CMD" >&2
   exit 2
 fi
