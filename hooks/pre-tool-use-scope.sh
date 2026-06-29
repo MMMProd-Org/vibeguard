@@ -27,6 +27,11 @@ if [ -z "${CLAUDE_PROJECT_DIR:-}" ] || [ ! -d "${CLAUDE_PROJECT_DIR}" ]; then
 fi
 # M3: normalize CLAUDE_PROJECT_DIR trailing slash to prevent prefix-match failures.
 CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR%/}"
+# Canonicalize the project dir too, so a symlinked temp root (macOS /var ->
+# /private/var) matches readlink-resolved targets below. Without this, a valid
+# in-project write is wrongly blocked on macOS. Fallback to the raw value.
+_cpd_canon="$(readlink -f -- "$CLAUDE_PROJECT_DIR" 2>/dev/null || true)"
+[ -n "$_cpd_canon" ] && CLAUDE_PROJECT_DIR="${_cpd_canon%/}"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "BLOCKED : jq absent, hook sécurité non fiable." >&2
