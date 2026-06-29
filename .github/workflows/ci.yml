@@ -1,0 +1,41 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    name: tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: install deps (linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq shellcheck
+      - name: install deps (macos)
+        if: runner.os == 'macOS'
+        run: brew install jq shellcheck
+      - name: shellcheck
+        run: shellcheck -S warning hooks/*.sh codex/run.sh install.sh scripts/*.sh
+      - name: tests
+        run: |
+          bash tests/test-block-force-push.sh
+          bash tests/test-scope.sh
+          bash tests/test-install-merge.sh
+          bash tests/test-danger.sh
+          bash tests/test-do-release.sh
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+      - name: trufflehog
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          extra_args: --results=verified,unknown
