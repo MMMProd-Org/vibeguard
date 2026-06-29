@@ -28,11 +28,15 @@ HOOKS=(
 register_hook() {
   local file="$1" cmd="$2" ev="$3" m="$4" tmp
   tmp="$(mktemp)"
-  jq --arg cmd "$cmd" --arg ev "$ev" --arg m "$m" '
+  if ! jq --arg cmd "$cmd" --arg ev "$ev" --arg m "$m" '
     .hooks //= {} | .hooks[$ev] //= [] |
     if ([.hooks[$ev][]?.hooks[]?.command] | any(. == $cmd)) then .
     else .hooks[$ev] += [{matcher:$m, hooks:[{type:"command", command:$cmd}]}] end
-  ' "$file" > "$tmp"
+  ' "$file" > "$tmp"; then
+    rm -f "$tmp"
+    echo "vibeguard: $file is not valid JSON — fix or remove it, then re-run." >&2
+    exit 1
+  fi
   if cmp -s "$file" "$tmp"; then rm -f "$tmp"; else mv "$tmp" "$file"; fi
 }
 
@@ -43,7 +47,7 @@ install_file() {
   local src="$1" dst="$2"
   if [ -e "$dst" ]; then
     if cmp -s "$src" "$dst"; then chmod +x "$dst"; return 0; fi
-    cp "$dst" "$dst.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"
+    cp "$dst" "$dst.vibeguard-bak.$(date +%s 2>/dev/null || echo bak).$$"
   fi
   cp "$src" "$dst"
   chmod +x "$dst"
@@ -61,7 +65,7 @@ for spec in "${HOOKS[@]}"; do
   f="${spec%%:*}"; rest="${spec#*:}"; event="${rest%%:*}"; matcher="${rest##*:}"
   register_hook "$SETTINGS" 'bash "${CLAUDE_PROJECT_DIR:?CLAUDE_PROJECT_DIR unset}/.claude/hooks/'"$f"'"' "$event" "$matcher"
 done
-cmp -s "$SNAP" "$SETTINGS" || cp "$SNAP" "$SETTINGS.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"
+cmp -s "$SNAP" "$SETTINGS" || cp "$SNAP" "$SETTINGS.vibeguard-bak.$(date +%s 2>/dev/null || echo bak).$$"
 rm -f "$SNAP"
 
 # Codex: bridge run.sh + merge into .codex/hooks.json (back up once, only if it changes)
@@ -74,7 +78,7 @@ for spec in "${HOOKS[@]}"; do
   f="${spec%%:*}"; rest="${spec#*:}"; event="${rest%%:*}"; matcher="${rest##*:}"
   register_hook "$CX" "bash .codex/hooks/run.sh $f" "$event" "$matcher"
 done
-cmp -s "$CXSNAP" "$CX" || cp "$CXSNAP" "$CX.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"
+cmp -s "$CXSNAP" "$CX" || cp "$CXSNAP" "$CX.vibeguard-bak.$(date +%s 2>/dev/null || echo bak).$$"
 rm -f "$CXSNAP"
 
 echo "vibeguard: installed ${#HOOKS[@]} hook(s) into $TARGET (Claude + Codex). Backups: *.vibeguard-bak.*"

@@ -42,5 +42,11 @@ T2="$(mktemp -d)"; git -C "$T2" init -q
 bash "$VG/install.sh" "$T2" >/dev/null 2>&1
 ok "$(jq -r '[.hooks.PreToolUse[]?.hooks[]?.command]|any(test("block-force-push"))' "$T2/.claude/settings.json")" "true" "fresh repo: hook installed"
 
+echo "=== invalid existing settings.json -> fail-closed (no cryptic jq error) ==="
+T3="$(mktemp -d)"; git -C "$T3" init -q; mkdir -p "$T3/.claude"
+printf 'not valid json {' > "$T3/.claude/settings.json"
+bash "$VG/install.sh" "$T3" >/dev/null 2>&1; rc=$?
+ok "$([ "$rc" -ne 0 ] && echo nz)" "nz" "invalid settings.json -> non-zero exit (clear failure)"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

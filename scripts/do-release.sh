@@ -7,7 +7,7 @@
 #     <commit-sha>  optional; default = HEAD of origin/main after fetch.
 #
 # Safe by design: refuses to overwrite an existing tag or release.
-# Ne touche jamais a main, ne merge rien. Tag + push tag + gh release create.
+# Never touches the base branch and never merges; it only tags, pushes the tag, and runs gh release create.
 set -euo pipefail
 
 die(){ echo "ERROR: $*" >&2; exit 1; }
