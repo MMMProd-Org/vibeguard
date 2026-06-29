@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 #
-# scripts/test-block-force-push.sh — regression harness for #1032.
+# tests/test-block-force-push.sh — regression harness for #1032.
 #
 # Exercises .claude/hooks/block-force-push.sh against the destructive-command
 # patterns it must block (exit 2) and the benign commands it must allow (exit 0).
 # Run from repo root :
 #
-#   bash scripts/test-block-force-push.sh
+#   bash tests/test-block-force-push.sh
 #
 # Override the hook under test (red/green mutation check) :
 #
-#   HOOK_PATH=/tmp/mutated-hook.sh bash scripts/test-block-force-push.sh
+#   HOOK_PATH=/tmp/mutated-hook.sh bash tests/test-block-force-push.sh
 #
 # Exits 0 on all-pass, 1 on any fail. jq is required by the hook itself.
 

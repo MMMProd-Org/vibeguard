@@ -17,17 +17,13 @@ set -euo pipefail
 #   - rm in any recursive-and-force combination (-rf, -fr, mixed -r --force,
 #     --recursive -f, etc.)
 #
-# Implicit `git push` (no branch specified) is NOT covered here ; the sibling
-# `pre-tool-use-bash.sh` Phase 2 state-read check handles that case
-# (state-of-the-art : reads HEAD live).
+# Implicit `git push` (no branch specified) is NOT covered here ; a sibling bash guard (not shipped in this minimal set).
 #
 # Exit codes :
 #   0  allow
 #   2  block (stderr emitted to agent context — agent must STOP)
 #
-# Defense-in-depth complement to allowed-tools restriction in
-# .claude/commands/issue-go.md. allowed-tools is positive whitelist ; this hook
-# is the negative guardrail catching dangerous variants of allowed commands.
+# Negative guardrail catching dangerous variants of common commands.
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "[block-force-push] BLOCKED : jq absent, hook unreliable" >&2
@@ -51,7 +47,7 @@ fi
 block() {
   printf '[block-force-push] BLOCKED : %s\n' "$1" >&2
   printf '[block-force-push] Command  : %s\n' "$CMD" >&2
-  printf '[block-force-push] Reason   : forbidden by /issue-go protocol (ISSUE_EXECUTION_PROTOCOL_v8 §COMMANDES INTERDITES)\n' >&2
+  printf '[block-force-push] Reason   : forbidden: destructive git/rm command\n' >&2
   exit 2
 }
 

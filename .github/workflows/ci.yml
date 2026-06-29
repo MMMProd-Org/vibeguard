@@ -35,7 +35,7 @@ jobs:
       - name: gitleaks (CLI via docker, no license needed for org repos)
         run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /repo --no-banner
       - name: trufflehog
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.95.7
         with:
           path: ./
           extra_args: --results=verified,unknown

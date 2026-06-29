@@ -50,7 +50,7 @@ trap log_telemetry EXIT
 
 INPUT=$(cat)
 
-TARGET=$(echo "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null) || {
+TARGET=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null) || {
   echo "BLOCKED : input JSON invalide." >&2
   exit 2
 }
@@ -63,9 +63,9 @@ if [ -z "$TARGET" ]; then
   # validate each by re-invoking this hook with a synthesized single-file payload
   # (reuses the full scope logic, no duplication). Fail-closed if a path is present
   # but unparseable. Claude never emits apply_patch, so this is Codex-only-effective.
-  TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || echo "")
+  TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // empty' 2>/dev/null || echo "")
   if [ "$TOOL" = "apply_patch" ]; then
-    PATCH=$(echo "$INPUT" | jq -r '.tool_input.command // .tool_input.input // .tool_input.patch // empty' 2>/dev/null || echo "")
+    PATCH=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // .tool_input.input // .tool_input.patch // empty' 2>/dev/null || echo "")
     PATHS=$(printf '%s\n' "$PATCH" | sed -nE 's/^\*\*\* (Add|Update|Delete) File: (.+)$/\2/p; s/^\*\*\* Move to: (.+)$/\1/p')
     if [ -z "$PATHS" ]; then
       echo "BLOCKED : apply_patch sans chemin parsable — scope non verifiable, fail-closed." >&2
@@ -189,7 +189,7 @@ if [ "$TARGET" = "${CLAUDE_PROJECT_DIR}/.session-scope.json" ]; then
       echo "BLOCKED : scope primaire possede par une autre session LLM (llm=$OWNER_LLM)." >&2
       echo "Multi-LLM detecte → worktree dedie OBLIGATOIRE :" >&2
       echo "  git worktree add ${CLAUDE_PROJECT_DIR}/.worktrees/<name> -b <branch> origin/main" >&2
-      echo "  bash scripts/bootstrap-worktree.sh ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
+      echo "  bash <your-worktree-bootstrap> ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
       echo "Kill-switch audite : SCOPE_TAKEOVER=1 (uniquement sur demande humaine explicite)." >&2
       exit 2
     fi
@@ -266,7 +266,7 @@ if ! SCOPE_FILE=$(find_scope_file "$TARGET"); then
     WT_NAME="${WORKTREE_ROOT##*/}"
     echo "BLOCKED : worktree ${WT_NAME} sans .session-scope.json." >&2
     echo "Run :" >&2
-    echo "  bash scripts/bootstrap-worktree.sh ${CLAUDE_PROJECT_DIR}/.worktrees/${WT_NAME} --scope-template \"<objective>\"" >&2
+    echo "  bash <your-worktree-bootstrap> ${CLAUDE_PROJECT_DIR}/.worktrees/${WT_NAME} --scope-template \"<objective>\"" >&2
     echo "" >&2
     echo "Fallback vers primary scope est interdit pour les worktrees (LOCK-V4-2)." >&2
     exit 2
@@ -361,7 +361,7 @@ if [ -z "$WORKTREE_ROOT" ] && [ "$SCOPE_FILE" = "${CLAUDE_PROJECT_DIR}/.session-
         echo "Le repo principal n'est pas un terrain de dev quand un autre agent en possede le scope." >&2
         echo "Cree un worktree dedie :" >&2
         echo "  git worktree add ${CLAUDE_PROJECT_DIR}/.worktrees/<name> -b <branch> origin/main" >&2
-        echo "  SCOPE_LLM=claude bash scripts/bootstrap-worktree.sh ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
+        echo "  SCOPE_LLM=claude bash <your-worktree-bootstrap> ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
         echo "Kill-switch audite : SCOPE_TAKEOVER=1 (demande humaine explicite uniquement)." >&2
         exit 2
         ;;
@@ -399,7 +399,7 @@ if [ -n "$WORKTREE_ROOT" ] && [ "${SCOPE_TAKEOVER:-0}" != "1" ]; then
       echo "Chaque agent = son propre worktree (JAMAIS partager — incident PR #1564)." >&2
       echo "Cree le tien :" >&2
       echo "  git worktree add ${CLAUDE_PROJECT_DIR}/.worktrees/<name> -b <branch> origin/main" >&2
-      echo "  SCOPE_LLM=claude bash scripts/bootstrap-worktree.sh ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
+      echo "  SCOPE_LLM=claude bash <your-worktree-bootstrap> ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
       echo "Kill-switch audite : SCOPE_TAKEOVER=1 (demande humaine explicite uniquement)." >&2
       exit 2
     fi
