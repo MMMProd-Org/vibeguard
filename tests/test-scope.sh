@@ -19,5 +19,12 @@ echo '{"scopePaths":["src/"]}' > "$PS/.session-scope.json"
 feed "$PS" "$PS/src/a.ts";   ok $? 0 "scope[src/] + write src/ -> ALLOW"
 feed "$PS" "$PS/other/b.ts"; ok $? 2 "scope[src/] + write other/ -> BLOCK (enforced)"
 
+# B2-portable symlink-escape canonicalization (regression for QODO #1: macOS readlink -f)
+SL="$(cd "$(mktemp -d)" && pwd -P)"; OUT="$(cd "$(mktemp -d)" && pwd -P)"
+ln -s "$OUT" "$SL/escape"                                 # symlink dir inside project -> outside
+feed "$SL" "$SL/escape/evil.txt"; ok $? 2 "symlink parent -> outside project -> BLOCK (canonicalized)"
+touch "$SL/real.txt"; ln -s "$SL/real.txt" "$SL/inside"   # symlink inside project -> inside
+feed "$SL" "$SL/inside";          ok $? 0 "symlink -> inside project -> ALLOW (canonicalized)"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

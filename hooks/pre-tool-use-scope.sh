@@ -28,6 +28,19 @@ fi
 # M3: normalize CLAUDE_PROJECT_DIR trailing slash to prevent prefix-match failures.
 CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR%/}"
 
+# B2-portable: canonicalize symlinks across platforms. Older macOS ships a readlink
+# without -f, where `readlink -f ... || echo ""` silently yields "" and SKIPS the
+# symlink-escape checks below (fail-open). Prefer realpath/python3/greadlink, fall
+# back to readlink -f. Prints the resolved path; empty + nonzero if nothing resolves.
+# ponytail: these 4 cover the macOS/Linux matrix; perl omitted (rarely the sole resolver).
+realpath_portable() {
+  if command -v realpath  >/dev/null 2>&1; then realpath  "$1" 2>/dev/null && return 0; fi
+  if command -v python3   >/dev/null 2>&1; then python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1" 2>/dev/null && return 0; fi
+  if command -v greadlink >/dev/null 2>&1; then greadlink -f "$1" 2>/dev/null && return 0; fi
+  readlink -f "$1" 2>/dev/null && return 0
+  return 1
+}
+
 if ! command -v jq >/dev/null 2>&1; then
   echo "BLOCKED : jq absent, hook sécurité non fiable." >&2
   exit 2
@@ -119,12 +132,11 @@ if [ "${TARGET##*/}" = ".session-scope.json" ] && [ -L "$TARGET" ]; then
 fi
 
 # B2: resolve symlinks in TARGET to block symlink-to-outside attacks.
-# readlink -f follows the chain and accepts non-existent targets when the
-# parent exists. For new-file writes, resolve the parent directory so a symlinked
-# .worktrees/ parent cannot turn a control-plane repair into an outside-project
-# write.
+# realpath_portable follows the chain across platforms (see helper above). For
+# new-file writes, resolve the parent directory so a symlinked .worktrees/ parent
+# cannot turn a control-plane repair into an outside-project write.
 if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
-  RESOLVED=$(readlink -f -- "$TARGET" 2>/dev/null || echo "")
+  RESOLVED=$(realpath_portable "$TARGET" || echo "")
   if [ -n "$RESOLVED" ]; then
     case "$RESOLVED" in
       "${CLAUDE_PROJECT_DIR}"|"${CLAUDE_PROJECT_DIR}"/*) TARGET="$RESOLVED" ;;
@@ -133,11 +145,15 @@ if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
         exit 2
         ;;
     esac
+  elif [ -L "$TARGET" ]; then
+    # fail-closed: an unresolvable symlink could escape the project; refuse.
+    echo "BLOCKED : cannot canonicalize symlink ($TARGET) — no path resolver (install coreutils)." >&2
+    exit 2
   fi
 else
   TARGET_DIR="${TARGET%/*}"
   TARGET_BASENAME="${TARGET##*/}"
-  RESOLVED_DIR=$(readlink -f -- "$TARGET_DIR" 2>/dev/null || echo "")
+  RESOLVED_DIR=$(realpath_portable "$TARGET_DIR" || echo "")
   if [ -n "$RESOLVED_DIR" ]; then
     case "$RESOLVED_DIR" in
       "${CLAUDE_PROJECT_DIR}"|"${CLAUDE_PROJECT_DIR}"/*) TARGET="${RESOLVED_DIR}/${TARGET_BASENAME}" ;;
@@ -146,6 +162,10 @@ else
         exit 2
         ;;
     esac
+  elif [ -L "$TARGET_DIR" ]; then
+    # fail-closed: an unresolvable symlinked parent could escape; refuse.
+    echo "BLOCKED : cannot canonicalize symlink parent ($TARGET_DIR) — no path resolver (install coreutils)." >&2
+    exit 2
   fi
 fi
 

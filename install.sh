@@ -37,10 +37,20 @@ register_hook() {
 }
 
 mkdir -p "$TARGET/.claude/hooks"
+# install_file <src> <dst>: never silently clobber a differing file.
+# identical -> skip (true idempotence); differs -> back up first (settings.json policy).
+install_file() {
+  local src="$1" dst="$2"
+  if [ -e "$dst" ]; then
+    if cmp -s "$src" "$dst"; then chmod +x "$dst"; return 0; fi
+    cp "$dst" "$dst.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"
+  fi
+  cp "$src" "$dst"
+  chmod +x "$dst"
+}
 for spec in "${HOOKS[@]}"; do
   f="${spec%%:*}"
-  cp "$VG_SRC/hooks/$f" "$TARGET/.claude/hooks/$f"
-  chmod +x "$TARGET/.claude/hooks/$f"
+  install_file "$VG_SRC/hooks/$f" "$TARGET/.claude/hooks/$f"
 done
 
 # Claude: backup then merge into .claude/settings.json
@@ -54,8 +64,7 @@ done
 
 # Codex: bridge run.sh + backup then merge into .codex/hooks.json
 mkdir -p "$TARGET/.codex/hooks"
-cp "$VG_SRC/codex/run.sh" "$TARGET/.codex/hooks/run.sh"
-chmod +x "$TARGET/.codex/hooks/run.sh"
+install_file "$VG_SRC/codex/run.sh" "$TARGET/.codex/hooks/run.sh"
 CX="$TARGET/.codex/hooks.json"
 [ -f "$CX" ] || echo '{"hooks":{}}' > "$CX"
 cp "$CX" "$CX.vibeguard-bak.$(date +%s 2>/dev/null || echo bak)"

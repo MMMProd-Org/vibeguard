@@ -22,7 +22,7 @@ ok "$(jq -r '[.hooks.PreToolUse[]?.hooks[]?.command]|map(select(test("block-forc
 ok "$(ls "$T/.claude/"settings.json.vibeguard-bak.* >/dev/null 2>&1 && echo yes)" "yes" "backup created"
 
 echo "=== all 3 hooks registered with correct matchers ==="
-ok "$(jq -r '[.hooks.PreToolUse[]?|select((.hooks[]?.command//"")|test("pre-tool-use-scope"))|.matcher]|.[0]' "$T/.claude/settings.json" | grep -c Edit)" "1" "scope hook matcher = Edit|Write|... (not Bash)"
+ok "$(jq -r '[.hooks.PreToolUse[]?|select((.hooks[]?.command//"")|test("pre-tool-use-scope"))|.matcher]|.[0]' "$T/.claude/settings.json")" "Edit|Write|NotebookEdit|MultiEdit|apply_patch" "scope hook matcher = exact Edit|Write|NotebookEdit|MultiEdit|apply_patch"
 ok "$(jq -r '[.hooks.PreToolUse[]?.hooks[]?.command]|any(test("pre-tool-use-danger"))' "$T/.claude/settings.json")" "true" "danger hook registered"
 ok "$([ -f "$T/.claude/hooks/pre-tool-use-danger.sh" ] && echo yes)" "yes" "danger hook file copied"
 ok "$([ -f "$T/.claude/hooks/pre-tool-use-scope.sh" ] && echo yes)" "yes" "scope hook file copied"
