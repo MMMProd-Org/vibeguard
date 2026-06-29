@@ -19,7 +19,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 REPO_ROOT="$PWD"
 
-HOOK="${HOOK_PATH:-$REPO_ROOT/.claude/hooks/block-force-push.sh}"
+HOOK="${HOOK_PATH:-$REPO_ROOT/hooks/block-force-push.sh}"
 
 if [ ! -f "$HOOK" ]; then
   echo "ERROR: hook not found: $HOOK" >&2

@@ -1,58 +1,65 @@
 # vibeguard
 
-[![CI](https://github.com/MMMProd-Org/vibeguard/actions/workflows/ci.yml/badge.svg)](https://github.com/MMMProd-Org/vibeguard/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/MMMProd-Org/vibeguard/actions/workflows/ci.yml/badge.svg)](https://github.com/MMMProd-Org/vibeguard/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![Claude Code + Codex](https://img.shields.io/badge/works%20with-Claude%20Code%20%2B%20Codex-blue)
 
+**A safety net for when you let an AI write code on your machine.**
 
-**Portable guardrails for AI coding agents.** Works with **Claude Code** and **Codex**, in **any project**, whatever your language. Made for vibe coders who just want their agent to stop doing scary things.
+You are vibe coding — letting Claude Code or Codex run commands and edit files for you. It is fast and fun, until the AI does something you did not want: it force pushes over a day of work, deletes the wrong folder, or changes files outside your project. vibeguard quietly stops those mistakes before they happen.
 
-> Best-effort footgun prevention — **not a security sandbox**. It catches common mistakes; it does not contain a determined or adversarial agent.
+Works with **Claude Code** and **Codex**. Any project, any language. No setup headaches.
 
-## Why
+> Think of it as a **seatbelt**: it protects you from the common crashes. It is not a bulletproof vault.
 
-Letting an AI agent run shell commands and edit files is great until it force-pushes over your work, wipes a folder, or rewrites files outside the project. vibeguard installs small pre-flight checks ("hooks") that stop the most common disasters **before** they run.
+---
 
-## What you get (this release)
-
-| Guardrail | What it stops |
-| --- | --- |
-| **force-push / destructive git** | force pushes, hard resets, direct pushes to the main branch, recursive-force file deletions |
-| **dangerous commands** | hook-skipping commit/push flags, blind `git add` of everything, force `git clean`, world-writable permission changes, recursive-force deletes |
-| **scope guard** (opt-in) | writing files **outside your project folder** is always blocked; restricting writes to specific subfolders is opt-in |
-
-All three run on **both** Claude Code and Codex (same scripts, one thin Codex bridge).
-
-## Install
+## Install (about a minute)
 
 ```bash
-git clone https://github.com/<you>/vibeguard
-cd <your-project>
-/path/to/vibeguard/install.sh        # or: bash /path/to/vibeguard/install.sh .
+git clone https://github.com/MMMProd-Org/vibeguard
+cd your-project
+/path/to/vibeguard/install.sh
 ```
 
-The installer:
-- copies the hooks into your project's `.claude/hooks/`,
-- **merges** them into `.claude/settings.json` without overwriting your existing settings (a timestamped backup is made),
-- registers the same hooks for Codex (`.codex/`),
-- is **idempotent** — running it twice changes nothing.
+Done — vibeguard is now watching. It plugs into Claude Code and Codex for you, and it **never deletes your existing settings** (it saves a backup first). Running it again is safe and changes nothing.
 
-Requires `jq` and `git` (`apt install jq` / `brew install jq`). `gh` (GitHub CLI) is optional and only used by advanced PR features.
+You just need `jq` and `git` installed first. On a Mac: `brew install jq`. On Linux: `sudo apt install jq`.
 
-## Scope guard is opt-in
+## What it stops
 
-By default the scope guard only blocks writes **outside** your project — your agent can work freely inside it. To restrict writes to specific folders, create a `.session-scope.json`:
+| If the AI tries to… | vibeguard |
+| --- | --- |
+| Force push and overwrite your history | 🚫 blocks it |
+| Throw away your changes with a hard reset | 🚫 blocks it |
+| Push straight to your main branch | 🚫 blocks it |
+| Delete a folder with a recursive force delete | 🚫 blocks it |
+| Skip your git safety checks | 🚫 blocks it |
+| Make files world-writable | 🚫 blocks it |
+| Edit files **outside** your project folder | 🚫 blocks it |
+
+When something is blocked, vibeguard prints a short, plain reason — so you and the AI both know what happened and why.
+
+## Want tighter control? (optional)
+
+Out of the box, vibeguard only stops the AI from touching things **outside** your project. If you also want to limit it to certain folders, create a file named `.session-scope.json` in your project:
 
 ```json
 { "scopePaths": ["src/", "tests/"] }
 ```
 
-To make a missing scope file fail closed (strict mode): set `VIBEGUARD_SCOPE_STRICT=1`.
+Now the AI can only write inside `src/` and `tests/`. Everything else is blocked.
 
-## Uninstall / rollback
+## Turning it off
 
-Hooks live in `.claude/hooks/`. Backups are saved next to the files as `*.vibeguard-bak.*`. Remove the hook entries from `.claude/settings.json` (or restore a backup) to disable.
+Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
 
-## Status
+## Good to know
 
-Early release. Ships the guardrails above with tests. More hooks (worktree isolation, PR-merge triage) are being de-coupled from their origin project and will land opt-in.
+vibeguard checks each command **before** it runs and blocks the dangerous ones. It cannot stop an AI that is deliberately trying to get around it — it is a seatbelt, not a vault. Use it as one layer of safety, not your only one.
 
-Advanced (PR-merge triage, worktree isolation, backlog) is deferred and specced in [`advanced/`](advanced/README.md).
+## What is coming next
+
+More advanced, optional features (automatic pull-request review, isolated workspaces) are planned and described in [`advanced/`](advanced/README.md).
+
+## License
+
+MIT — free to use. See [LICENSE](LICENSE).

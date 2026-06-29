@@ -32,8 +32,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
+      - name: gitleaks (CLI via docker, no license needed for org repos)
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /repo --no-banner
       - name: trufflehog
         uses: trufflesecurity/trufflehog@main
         with:
