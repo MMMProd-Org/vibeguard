@@ -23,18 +23,23 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) |
 [ -z "$CMD" ] && exit 0
 
 # `gh` only when it is in shell command position (after optional wrappers), so a
-# literal mention inside a string/search is not gated.
-CMD_FLAT=$(printf '%s\n' "$CMD" | tr '\n' ' ')
+# literal mention inside a string/search is not gated. A newline is a real
+# command separator, so it is NOT flattened to a space -- segments split on
+# | ; & AND newlines (else `echo x<nl>gh pr create` would hide the create).
 GH_WRAPPER_RE='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+|env([[:space:]]+(-[^[:space:]]+|--[^[:space:]]+|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+))*|time([[:space:]]+-[^[:space:]]+)*|command([[:space:]]+--)?|sudo([[:space:]]+(-[^[:space:]]+|--[^[:space:]]+))*|timeout([[:space:]]+(-[^[:space:]]+|--[^[:space:]]+|[0-9]+[smhd]?))*|if|then|do|while|until|!)[[:space:]]+'
 GH_BIN_RE='([^[:space:]]*/)?(\\)?gh'
 GH_COMMAND_RE="^[[:space:]]*([({][[:space:]]*)*(${GH_WRAPPER_RE})*${GH_BIN_RE}[[:space:]]+"
 
 while IFS= read -r SEG; do
-  echo "$SEG" | grep -qE "$GH_COMMAND_RE" || continue
+  # Drop a trailing shell comment (a `#` after whitespace/start) so a flag in
+  # a comment -- `gh pr create -t t # --draft` -- is not mistaken for a real
+  # flag bash would pass. A `#` glued to a token ('#5') is left intact.
+  SEG=$(printf '%s' "$SEG" | sed -E 's/(^|[[:space:]])#.*$//')
+  grep -qE "$GH_COMMAND_RE" <<<"$SEG" || continue
 
   # 1. `gh pr create` must be --draft.
-  if echo "$SEG" | grep -qE "${GH_COMMAND_RE}[^|;&]*pr[[:space:]]+create([[:space:]]|$)"; then
-    if ! echo "$SEG" | grep -qE '(^|[[:space:]])--draft([[:space:]]|$)'; then
+  if grep -qE "${GH_COMMAND_RE}[^|;&]*pr[[:space:]]+create([[:space:]]|$)" <<<"$SEG"; then
+    if ! grep -qE '(^|[[:space:]])--draft([[:space:]]|$)' <<<"$SEG"; then
       echo "BLOCKED : gh pr create without --draft." >&2
       echo "Draft-review mode: open the PR as a Draft so review bots / humans can look" >&2
       echo "before CI runs, then mark it ready once reviews are settled." >&2
@@ -43,15 +48,15 @@ while IFS= read -r SEG; do
   fi
 
   # 2. `gh pr ready` must be acknowledged (skip an explicit --undo back to draft).
-  if echo "$SEG" | grep -qE "${GH_COMMAND_RE}[^|;&]*pr[[:space:]]+ready([[:space:]]|$)"; then
-    echo "$SEG" | grep -qE '(^|[[:space:]])--undo([[:space:]]|$)' && continue
-    if ! echo "$SEG" | grep -qE '(^|[[:space:]])PR_READY_ACK=1([[:space:]]|$)'; then
+  if grep -qE "${GH_COMMAND_RE}[^|;&]*pr[[:space:]]+ready([[:space:]]|$)" <<<"$SEG"; then
+    grep -qE '(^|[[:space:]])--undo([[:space:]]|$)' <<<"$SEG" && continue
+    if ! grep -qE '(^|[[:space:]])PR_READY_ACK=1([[:space:]]|$)' <<<"$SEG"; then
       echo "BLOCKED : gh pr ready without PR_READY_ACK=1." >&2
       echo "Before marking ready, confirm the review bots are settled and your local" >&2
       echo "checks pass, then re-run explicitly: PR_READY_ACK=1 gh pr ready <PR>." >&2
       exit 2
     fi
   fi
-done < <(printf '%s\n' "$CMD_FLAT" | tr '|;&' '\n')
+done < <(printf '%s\n' "$CMD" | tr '|;&' '\n')
 
 exit 0
