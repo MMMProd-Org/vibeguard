@@ -20,6 +20,14 @@ set -euo pipefail
 # and review-receipt parts are intentionally NOT ported here (separate opt-ins).
 # Fail-CLOSED (no jq / bad input JSON -> block), mirroring pre-tool-use-danger.sh:
 # this is a security guard, not an advisory reminder.
+#
+# SCOPE (seatbelt, not a vault -- see README): it parses the NATURAL command
+# forms a tool actually emits -- `git push`, `git -C <path> push`, multi-command
+# strings, ~/$HOME paths. It does NOT defeat deliberate obfuscation of the
+# command itself: a quoted command name (`'git' push`), quote-glued global
+# flags (`git '--git-dir=x' push`), command substitution, or backslash/char-split
+# quoting. Those degrade to a MISSED check (allow), never a wrong block; closing
+# them needs a real shell parser, which is out of scope for a footgun guard.
 
 command -v jq >/dev/null 2>&1 || { echo "BLOCKED : jq missing." >&2; exit 2; }
 INPUT=$(cat)
