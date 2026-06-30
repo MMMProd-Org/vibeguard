@@ -8,7 +8,7 @@
 # Writes .claude/.session-lock.json at the root of the current worktree. If a
 # live lock owned by another session already exists (pid alive AND host match
 # AND younger than the TTL) -> exit 2 with a warning. A stale lock is overwritten.
-# Outside a git tree -> no-op.
+# Outside any git tree AND with no CLAUDE_PROJECT_DIR -> no-op.
 #
 # Lock fields: {lock_id, pid, host, started_at, project_dir, claude_session_id}.
 #   - lock_id = "${pid}:${host}:${started_at_epoch}" (robust identity).
@@ -27,7 +27,7 @@ acquire_session_lock() {
   local worktree_root lock_dir lock_file
   local lock_pid lock_host started_at_iso started_at_epoch lock_id
   local existing_pid existing_host existing_started_at existing_project_dir existing_lock_id
-  local age_seconds elapsed stale
+  local age_seconds elapsed stale kill_err
 
   # Resolve the current worktree root. Use CLAUDE_PROJECT_DIR first so the lock
   # is written where pre-tool-use-pwd-guard.sh looks for it, then fall back to the
@@ -98,9 +98,16 @@ acquire_session_lock() {
       fi
     fi
     # Sub-check B: pid dead (only meaningful when the host matches - see C).
+    # Distinguish ESRCH (no such process -> dead -> reclaim) from EPERM (process
+    # alive but owned by another user -> keep the lock, fail-closed). kill -0
+    # exposes no errno in shell, so match the message; an unrecognized failure is
+    # treated as "still alive" rather than risk overwriting a live lock.
     if [ "$stale" = "0" ] && [ "$existing_host" = "$lock_host" ]; then
-      if ! kill -0 "$existing_pid" 2>/dev/null; then
-        stale=1
+      if ! kill_err=$(kill -0 "$existing_pid" 2>&1); then
+        case "$kill_err" in
+          *"No such process"*|*"no such process"*|*ESRCH*) stale=1 ;;
+          *) : ;;  # EPERM / unknown -> assume alive, do not overwrite
+        esac
       fi
     fi
     # Sub-check C: host mismatch (cannot kill -0 across machines, treat as stale).

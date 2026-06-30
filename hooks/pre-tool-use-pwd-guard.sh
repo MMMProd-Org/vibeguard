@@ -24,7 +24,8 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-}"
 if [ -z "$PROJECT_DIR" ]; then
   PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
 fi
-# Not in any git tree -> no lock to enforce, do not break tooling outside a repo.
+# No project dir resolved (no CLAUDE_PROJECT_DIR and not in a git tree) -> no lock
+# to enforce; do not break tooling outside a project.
 [ -z "$PROJECT_DIR" ] && exit 0
 
 LOCK_FILE="$PROJECT_DIR/.claude/.session-lock.json"

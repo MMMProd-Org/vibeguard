@@ -16,16 +16,26 @@ set -euo pipefail
 
 VG_SRC="$(cd "$(dirname "$0")" && pwd)"
 
-# Parse an optional --with-worktree-lock flag + an optional positional TARGET.
+# Parse an optional --with-worktree-lock flag + at most one positional TARGET.
+# `--` ends option parsing (so a TARGET path may start with `-`); extra
+# positionals are a hard error rather than a silent last-wins.
 WITH_LOCK=0
 TARGET=""
-for arg in "$@"; do
-  case "$arg" in
-    --with-worktree-lock) WITH_LOCK=1 ;;
-    -h|--help) echo "Usage: ./install.sh [--with-worktree-lock] [TARGET_REPO]"; exit 0 ;;
-    -*) echo "vibeguard: unknown option $arg" >&2; exit 1 ;;
-    *) TARGET="$arg" ;;
-  esac
+TARGET_SET=0
+END_OPTS=0
+while [ $# -gt 0 ]; do
+  if [ "$END_OPTS" = "0" ]; then
+    case "$1" in
+      --) END_OPTS=1; shift; continue ;;
+      --with-worktree-lock) WITH_LOCK=1; shift; continue ;;
+      -h|--help) echo "Usage: ./install.sh [--with-worktree-lock] [--] [TARGET_REPO]"; exit 0 ;;
+      -*) echo "vibeguard: unknown option $1" >&2; exit 1 ;;
+    esac
+  fi
+  if [ "$TARGET_SET" = "1" ]; then
+    echo "vibeguard: too many arguments (one TARGET_REPO only): $1" >&2; exit 1
+  fi
+  TARGET="$1"; TARGET_SET=1; shift
 done
 TARGET="${TARGET:-$PWD}"
 
