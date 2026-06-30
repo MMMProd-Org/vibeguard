@@ -31,12 +31,12 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) |
 # --git-dir/--work-tree forms are detected and fail-closed below (refuse, never
 # check the wrong repo). Known limitation: a literal "git push" inside a string
 # argument (rg "git push") may match -- bash cannot truly tokenise a command.
-printf '%s\n' "$CMD" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^[:space:]]+[[:space:]]+)*push([[:space:]]|$|;|&|\|)' || exit 0
+grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^[:space:]]+[[:space:]]+)*push([[:space:]]|$|;|&|\|)' <<<"$CMD" || exit 0
 
 # Repo targeting via --git-dir/--work-tree is not resolved here. Rather than
 # check the current directory (the wrong repo) and hand out a free pass,
 # fail-closed: the push names a repo whose hooks config we cannot verify.
-if printf '%s\n' "$CMD" | grep -qE '(^|[[:space:]])--(git-dir|work-tree)([[:space:]]|=)'; then
+if grep -qE '(^|[[:space:]])--(git-dir|work-tree)([[:space:]]|=)' <<<"$CMD"; then
   echo "BLOCKED : git push via --git-dir/--work-tree; vibeguard cannot resolve that target to verify core.hooksPath." >&2
   echo "Run the push from inside the repo (plain 'git push') so its hooks config can be checked." >&2
   exit 2
@@ -45,7 +45,7 @@ fi
 # Resolve the target repo: honour `git -C <path>`, stripping ONE layer of the
 # surrounding matching quotes the shell would remove (so `git -C '/repo' push`
 # resolves to /repo). Else the current directory.
-CVAL=$(printf '%s\n' "$CMD" | sed -nE 's/.*git[[:space:]]+(.*[[:space:]]+)?-C[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+CVAL=$(sed -nE 's/.*git[[:space:]]+(.*[[:space:]]+)?-C[[:space:]]+([^[:space:]]+).*/\2/p' <<<"$CMD" | head -1 || true)
 CVAL="${CVAL#\'}"; CVAL="${CVAL%\'}"
 CVAL="${CVAL#\"}"; CVAL="${CVAL%\"}"
 if [ -n "$CVAL" ]; then HAS_C=1; TARGET_REPO="$CVAL"; else HAS_C=0; TARGET_REPO="."; fi
