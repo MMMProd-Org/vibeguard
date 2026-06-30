@@ -28,6 +28,7 @@ jobs:
           bash tests/test-pwd-guard.sh
           bash tests/test-session-lock.sh
           bash tests/test-worktree-lock-install.sh
+          bash tests/test-merge-triage.sh
   secrets:
     name: secret scan
     runs-on: ubuntu-latest

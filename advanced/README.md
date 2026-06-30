@@ -9,13 +9,16 @@ They are tracked here so the roadmap and the de-coupling work are explicit.
 
 > **Update:** the worktree session-lock has since shipped as an opt-in install
 > (`install.sh --with-worktree-lock`) — see the main README. The components
-> below remain deferred.
+> below remain deferred. (A **lite** PR merge-triage gate has shipped as an
+> opt-in install `--with-merge-triage` — it blocks a merge while a review bot has
+> unresolved threads, using GitHub's native thread resolution instead of the
+> heavier policy/ack system, which stays deferred.)
 
 ## Deferred components
 
 | Component | What it does | Why it is advanced |
 | --- | --- | --- |
-| PR merge-triage | Blocks a merge until reviewer-bot threads are triaged with a fresh signed acknowledgement | Needs `gh` auth + a GitHub PR + an `.agent-backlog/` store + a triage workflow |
+| PR merge-triage (full) | Policy-routing + signed-ack version (a policy generator, an ack store, and a byte-identical bot-pattern hash) | Heavyweight; the lite native-resolution gate shipped instead (see note above) |
 | bot-thread fetch (lib) | Single source of truth for the reviewer-bot login pattern + thread hashing | Only useful as the shared library for the triage chain |
 | merge-state engine | Read-only merge-state dump + next-action recommendation + JSON policy | ~1000 lines; the engine behind a project-specific merge workflow |
 | draft-mode + review-receipt gates | Forces PRs to enter as Draft and requires a local review receipt before push | Opinionated team workflow; would block a beginner's normal push |
