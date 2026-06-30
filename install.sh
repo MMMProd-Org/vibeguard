@@ -17,7 +17,8 @@ set -euo pipefail
 
 VG_SRC="$(cd "$(dirname "$0")" && pwd)"
 
-# Parse an optional --with-worktree-lock flag + at most one positional TARGET.
+# Parse optional opt-in flags (--with-worktree-lock / --with-merge-triage /
+# --with-hookspath-guard) + at most one positional TARGET.
 # `--` ends option parsing (so a TARGET path may start with `-`); extra
 # positionals are a hard error rather than a silent last-wins.
 WITH_LOCK=0

@@ -13,8 +13,8 @@ set -euo pipefail
 # Scope: the LOCAL (repo) core.hooksPath only. A pre-existing GLOBAL hooksPath is
 # the user's own legit setup (e.g. git-templates) and must NOT false-positive; a
 # runtime bypass writes to local config by default, so local is what we check.
-# ponytail: --global / --worktree redirects are out of scope (louder, all-repos;
-# checking global would brick every legit global-hooks user).
+# --global / --worktree redirects are out of scope (louder, all-repos; checking
+# global would brick every legit global-hooks user).
 #
 # Extracted from the upstream bash-guard push-state check. The husky-presence
 # and review-receipt parts are intentionally NOT ported here (separate opt-ins).
@@ -26,71 +26,78 @@ INPUT=$(cat)
 CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || { echo "BLOCKED : invalid input JSON." >&2; exit 2; }
 [ -z "$CMD" ] && exit 0
 
-# Act only on a git push. Detection matches `git push`, `git -C <path> push`,
-# `git -c k=v push`. Repo targeting is RESOLVED only for `git -C <path>`; the
-# --git-dir/--work-tree forms are detected and fail-closed below (refuse, never
-# check the wrong repo). Known limitation: a literal "git push" inside a string
-# argument (rg "git push") may match -- bash cannot truly tokenise a command.
-grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^[:space:]]+[[:space:]]+)*push([[:space:]]|$|;|&|\|)' <<<"$CMD" || exit 0
+# Per-segment so a `-C` in one simple command is never paired with a `push` in
+# another (e.g. `git -C /safe status; git push` must check the CWD repo, not
+# /safe). First join backslash-newline line continuations (so `git \<nl>push` is
+# seen as one command), then iterate the segments split on shell separators.
+JOINED=${CMD//$'\\'$'\n'/ }
 
-# Repo targeting via --git-dir/--work-tree is not resolved here. Rather than
-# check the current directory (the wrong repo) and hand out a free pass,
-# fail-closed: the push names a repo whose hooks config we cannot verify.
-if grep -qE '(^|[[:space:]])--(git-dir|work-tree)([[:space:]]|=)' <<<"$CMD"; then
-  echo "BLOCKED : git push via --git-dir/--work-tree; vibeguard cannot resolve that target to verify core.hooksPath." >&2
-  echo "Run the push from inside the repo (plain 'git push') so its hooks config can be checked." >&2
-  exit 2
-fi
+# check_segment <segment> : exit 2 to BLOCK; return 0 to allow this segment.
+check_segment() {
+  local SEG="$1" CVAL TARGET_REPO HAS_C HOOKS_PATH
+  # only a git push (no separators inside a segment, so [^[:space:]] is safe).
+  grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^[:space:]]+[[:space:]]+)*push([[:space:]]|$)' <<<"$SEG" || return 0
 
-# Resolve the target repo: honour `git -C <path>`, stripping ONE layer of the
-# surrounding matching quotes the shell would remove (so `git -C '/repo' push`
-# resolves to /repo). Else the current directory.
-CVAL=$(sed -nE 's/.*git[[:space:]]+(.*[[:space:]]+)?-C[[:space:]]+([^[:space:]]+).*/\2/p' <<<"$CMD" | head -1 || true)
-CVAL="${CVAL#\'}"; CVAL="${CVAL%\'}"
-CVAL="${CVAL#\"}"; CVAL="${CVAL%\"}"
-if [ -n "$CVAL" ]; then HAS_C=1; TARGET_REPO="$CVAL"; else HAS_C=0; TARGET_REPO="."; fi
-
-# Expand a leading ~ or $HOME the shell WOULD expand at exec time; without this
-# a legit `git -C ~/repo push` looks unresolvable and is wrongly fail-closed.
-# Safe prefix substitution only (the hook shares the command's $HOME) -- never
-# eval the command string. Other vars / ~user stay literal -> unresolved -> blocked.
-if [ "$HAS_C" = 1 ]; then
-  case "$TARGET_REPO" in
-    \~)           TARGET_REPO="$HOME" ;;
-    \~/*)         TARGET_REPO="$HOME/${TARGET_REPO#\~/}" ;;
-    '${HOME}')    TARGET_REPO="$HOME" ;;
-    '${HOME}/'*)  TARGET_REPO="$HOME/${TARGET_REPO#'${HOME}/'}" ;;
-    '$HOME')      TARGET_REPO="$HOME" ;;
-    '$HOME/'*)    TARGET_REPO="$HOME/${TARGET_REPO#'$HOME/'}" ;;
-  esac
-fi
-
-# Resolve the target as a git work tree. An explicit `-C` target that does NOT
-# resolve (e.g. a path with spaces the word-based parse truncated) is fail-closed
-# -- an explicit, unverifiable target must not get a free pass. With NO explicit
-# target (plain push) a non-repo cwd is a graceful no-op: nothing to protect.
-if ! git -C "$TARGET_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  if [ "$HAS_C" = 1 ]; then
-    echo "BLOCKED : git push -C target '$TARGET_REPO' could not be resolved to a git repo." >&2
-    echo "If the path has spaces/quotes, run the push from inside the repo so its hooks config can be checked." >&2
+  # --git-dir/--work-tree targeting is not resolved here. Rather than check the
+  # wrong repo, fail-closed: the push names a repo whose hooks we cannot verify.
+  if grep -qE '(^|[[:space:]])--(git-dir|work-tree)([[:space:]]|=)' <<<"$SEG"; then
+    echo "BLOCKED : git push via --git-dir/--work-tree; vibeguard cannot resolve that target to verify core.hooksPath." >&2
+    echo "Run the push from inside the repo (plain 'git push') so its hooks config can be checked." >&2
     exit 2
   fi
-  exit 0
-fi
 
-# Live LOCAL core.hooksPath. A runtime `git config core.hooksPath X` writes here
-# by default; --local excludes a legit global setup so it cannot false-positive.
-HOOKS_PATH=$(git -C "$TARGET_REPO" config --local --get core.hooksPath 2>/dev/null || true)
+  # Resolve `git -C <path>`, stripping ONE layer of surrounding matching quotes
+  # the shell would remove (so `git -C '/repo' push` resolves to /repo).
+  CVAL=$(sed -nE 's/.*git[[:space:]]+(.*[[:space:]]+)?-C[[:space:]]+([^[:space:]]+).*/\2/p' <<<"$SEG" | head -1 || true)
+  CVAL="${CVAL#\'}"; CVAL="${CVAL%\'}"
+  CVAL="${CVAL#\"}"; CVAL="${CVAL%\"}"
+  if [ -n "$CVAL" ]; then HAS_C=1; TARGET_REPO="$CVAL"; else HAS_C=0; TARGET_REPO="."; fi
 
-# Strict EXACT allow-list. Unset = default .git/hooks (fine). The husky values
-# are the only redirected paths considered safe. Exact match means a traversal
-# such as `.husky/../tmp/no-hooks` is NOT on the list -> blocked by default
-# (no explicit `..` case needed).
-case "$HOOKS_PATH" in
-  ""|".husky"|".husky/"|".husky/_"|".husky/_/") exit 0 ;;
-esac
+  # Expand a leading ~ or $HOME the shell WOULD expand at exec time; without this
+  # a legit `git -C ~/repo push` looks unresolvable and is wrongly fail-closed.
+  # Safe prefix substitution only (the hook shares the command's $HOME) -- never
+  # eval. Other vars / ~user stay literal -> unresolved -> blocked.
+  if [ "$HAS_C" = 1 ]; then
+    case "$TARGET_REPO" in
+      \~)           TARGET_REPO="$HOME" ;;
+      \~/*)         TARGET_REPO="$HOME/${TARGET_REPO#\~/}" ;;
+      '${HOME}')    TARGET_REPO="$HOME" ;;
+      '${HOME}/'*)  TARGET_REPO="$HOME/${TARGET_REPO#'${HOME}/'}" ;;
+      '$HOME')      TARGET_REPO="$HOME" ;;
+      '$HOME/'*)    TARGET_REPO="$HOME/${TARGET_REPO#'$HOME/'}" ;;
+    esac
+  fi
 
-echo "BLOCKED : git push with core.hooksPath=$HOOKS_PATH (expected: unset, .husky, or .husky/_)." >&2
-echo "Redirecting core.hooksPath silently bypasses your pre-push hooks. Reset it with:" >&2
-echo "  git -C $TARGET_REPO config --unset core.hooksPath" >&2
-exit 2
+  # Resolve the target as a git work tree. An explicit `-C` target that does NOT
+  # resolve (e.g. a spaced path the word-based parse truncated) is fail-closed.
+  # With NO explicit target a non-repo cwd is a graceful no-op: nothing to protect.
+  if ! git -C "$TARGET_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if [ "$HAS_C" = 1 ]; then
+      echo "BLOCKED : git push -C target '$TARGET_REPO' could not be resolved to a git repo." >&2
+      echo "If the path has spaces/quotes, run the push from inside the repo so its hooks config can be checked." >&2
+      exit 2
+    fi
+    return 0
+  fi
+
+  # Live LOCAL core.hooksPath. A runtime `git config core.hooksPath X` writes here
+  # by default; --local excludes a legit global setup so it cannot false-positive.
+  HOOKS_PATH=$(git -C "$TARGET_REPO" config --local --get core.hooksPath 2>/dev/null || true)
+  # Strict EXACT allow-list. Unset = default .git/hooks. Exact match means a
+  # traversal (.husky/../tmp) is NOT listed -> blocked by default.
+  case "$HOOKS_PATH" in
+    ""|".husky"|".husky/"|".husky/_"|".husky/_/") return 0 ;;
+  esac
+  echo "BLOCKED : git push with core.hooksPath=$HOOKS_PATH (expected: unset, .husky, or .husky/_)." >&2
+  echo "Redirecting core.hooksPath silently bypasses your pre-push hooks. Reset it with:" >&2
+  echo "  git -C $TARGET_REPO config --unset core.hooksPath" >&2
+  exit 2
+}
+
+# Process substitution (NOT a pipe) so check_segment's `exit 2` exits the hook,
+# not a subshell. tr maps each separator to a newline; read splits on newlines.
+while IFS= read -r SEG; do
+  check_segment "$SEG"
+done < <(printf '%s\n' "$JOINED" | tr '|;&' '\n')
+
+exit 0

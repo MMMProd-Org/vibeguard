@@ -68,6 +68,18 @@ feed "git -C \$HOME/myrepo push" HOME="$HOMEDIR"; ok $? 0 "-C \$HOME/repo expand
 # No explicit target + non-repo CWD -> graceful no-op (nothing to protect).
 feed_cwd "$NG" "git push";                       ok $? 0 "plain push from non-repo cwd -> allow (no-op)"
 
+# Multi-command: a -C in one segment must NOT be paired with a push in another.
+# cwd = an UNSAFE repo; `git -C <safe> status; git push` must check the cwd, BLOCK.
+SAFE=$(mkrepo); UNSAFE=$(mkrepo)
+git -C "$UNSAFE" config core.hooksPath "/tmp/evil-no-hooks"
+feed_cwd "$UNSAFE" "git -C $SAFE status; git push";  ok $? 2 "multi-cmd: -C /safe + push checks cwd repo -> BLOCK"
+git -C "$UNSAFE" config --unset core.hooksPath
+feed_cwd "$UNSAFE" "git -C $SAFE status; git push";  ok $? 0 "multi-cmd: push from safe cwd -> allow"
+
+# Backslash-newline line continuation must be joined (else `git \<nl>push` evades).
+git -C "$UNSAFE" config core.hooksPath "/tmp/evil-no-hooks"
+feed_cwd "$UNSAFE" "$(printf 'git \\\npush')";       ok $? 2 "line-continuation git\\<nl>push -> seen, BLOCK"
+
 # fail-closed: jq absent -> BLOCK (mirrors danger.sh)
 feed "git -C $R push" PATH="/nonexistent";       ok $? 2 "jq absent -> BLOCK (fail-closed)"
 
