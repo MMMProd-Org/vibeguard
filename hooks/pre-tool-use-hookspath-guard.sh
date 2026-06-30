@@ -50,6 +50,21 @@ CVAL="${CVAL#\'}"; CVAL="${CVAL%\'}"
 CVAL="${CVAL#\"}"; CVAL="${CVAL%\"}"
 if [ -n "$CVAL" ]; then HAS_C=1; TARGET_REPO="$CVAL"; else HAS_C=0; TARGET_REPO="."; fi
 
+# Expand a leading ~ or $HOME the shell WOULD expand at exec time; without this
+# a legit `git -C ~/repo push` looks unresolvable and is wrongly fail-closed.
+# Safe prefix substitution only (the hook shares the command's $HOME) -- never
+# eval the command string. Other vars / ~user stay literal -> unresolved -> blocked.
+if [ "$HAS_C" = 1 ]; then
+  case "$TARGET_REPO" in
+    \~)           TARGET_REPO="$HOME" ;;
+    \~/*)         TARGET_REPO="$HOME/${TARGET_REPO#\~/}" ;;
+    '${HOME}')    TARGET_REPO="$HOME" ;;
+    '${HOME}/'*)  TARGET_REPO="$HOME/${TARGET_REPO#'${HOME}/'}" ;;
+    '$HOME')      TARGET_REPO="$HOME" ;;
+    '$HOME/'*)    TARGET_REPO="$HOME/${TARGET_REPO#'$HOME/'}" ;;
+  esac
+fi
+
 # Resolve the target as a git work tree. An explicit `-C` target that does NOT
 # resolve (e.g. a path with spaces the word-based parse truncated) is fail-closed
 # -- an explicit, unverifiable target must not get a free pass. With NO explicit

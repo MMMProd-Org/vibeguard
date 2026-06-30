@@ -57,6 +57,14 @@ feed "git -C \"$SP\" push";                      ok $? 2 "-C path with spaces ->
 git -C "$R" config core.hooksPath "/tmp/evil-no-hooks"
 feed "git --git-dir=$R/.git --work-tree=$R push"; ok $? 2 "--git-dir/--work-tree -> BLOCK (fail-closed)"
 
+# ~ / $HOME in a -C path must be expanded (the shell would), not fail-closed.
+HOMEDIR=$(mktemp -d); HREPO="$HOMEDIR/myrepo"; mkdir -p "$HREPO"; git init -q "$HREPO"
+git -C "$HREPO" config core.hooksPath "/tmp/evil-no-hooks"
+feed "git -C ~/myrepo push" HOME="$HOMEDIR";     ok $? 2 "-C ~/repo expands -> BLOCK redirected (not fail-closed)"
+git -C "$HREPO" config core.hooksPath ".husky"
+feed "git -C ~/myrepo push" HOME="$HOMEDIR";     ok $? 0 "-C ~/repo expands -> allow safe (no false-positive)"
+feed "git -C \$HOME/myrepo push" HOME="$HOMEDIR"; ok $? 0 "-C \$HOME/repo expands -> allow safe"
+
 # No explicit target + non-repo CWD -> graceful no-op (nothing to protect).
 feed_cwd "$NG" "git push";                       ok $? 0 "plain push from non-repo cwd -> allow (no-op)"
 
