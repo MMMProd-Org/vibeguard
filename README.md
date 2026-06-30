@@ -115,7 +115,8 @@ default, and (like the other opt-ins) wired for **Claude Code** only.
 
 If you open PRs with the `gh` CLI and want a review-first flow, install the
 **draft-mode gate**. It makes `gh pr create` require `--draft` (so a PR enters
-GitHub as a Draft and review bots / humans can look before CI runs), and makes
+GitHub as a Draft -- a not-ready-for-review signal -- so review bots / humans can
+look before you mark it ready), and makes
 `gh pr ready` require an explicit `PR_READY_ACK=1` acknowledgement:
 
 ```bash
