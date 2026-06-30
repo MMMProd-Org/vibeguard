@@ -70,9 +70,26 @@ Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has
 
 vibeguard checks each command **before** it runs and blocks the dangerous ones. It cannot stop an AI that is deliberately trying to get around it — it is a seatbelt, not a vault. Use it as one layer of safety, not your only one. One specific gap: the branch check looks for `main`/`master` named in the command, so a plain push while you are already on `main` is not caught — keep your own branch protection as well.
 
-## What is coming next
+## Roadmap — what is here, what is next
 
-More advanced, optional features (automatic pull-request review, isolated workspaces) are planned and described in [`advanced/`](advanced/README.md).
+vibeguard ships a small, zero-config **core** today. Heavier, opt-in guardrails for
+teams already running a pull-request + merge-queue workflow are planned for **v2**
+(tracked in [`advanced/`](advanced/README.md)).
+
+| Guardrail | Status |
+| --- | --- |
+| Destructive-git guard (force-push, hard-reset, push-to-default-branch, recursive force-delete) | shipped |
+| Risky-command guard (stage-all, skip-git-checks, force-clean, world-writable) | shipped |
+| Stay-in-your-project scope guard (+ optional `.session-scope.json`) | shipped |
+| Worktree session-lock — one agent per worktree (multi-agent collision guard) | v2, opt-in |
+| PR merge-triage — block a merge until reviewer-bot threads are triaged | v2, opt-in |
+| Generic bot-review support (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor) | v2, opt-in |
+| Draft-mode + review-receipt gates | v2, opt-in |
+| Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
+
+The v2 guardrails are **not** installed by default: they assume a GitHub PR workflow
+and would get in a solo vibe-coder's way. See [`advanced/`](advanced/README.md) for the
+full spec and the de-coupling each one still needs.
 
 ## License
 

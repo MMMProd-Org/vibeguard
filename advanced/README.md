@@ -17,6 +17,7 @@ They are tracked here so the roadmap and the de-coupling work are explicit.
 | draft-mode + review-receipt gates | Forces PRs to enter as Draft and requires a local review receipt before push | Opinionated team workflow; would block a beginner's normal push |
 | worktree session-lock | Pins each agent session to its own worktree (multi-agent collision guard) | Pointless for a single agent in a single repo |
 | agent backlog | Files de-duplicated GitHub issues for out-of-scope findings | Needs a GitHub issues workflow + label conventions |
+| merge-queue CI | A `merge_group` CI check that re-runs the guards on the merge queue (secret scan over the queued range, repo-hygiene file gates) | Only meaningful with a GitHub merge queue; the core ships a simpler `ci.yml` instead |
 
 ## De-coupling required before any of this ships
 
