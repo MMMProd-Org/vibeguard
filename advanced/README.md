@@ -11,9 +11,9 @@ They are tracked here so the roadmap and the de-coupling work are explicit.
 
 | Component | What it does | Why it is advanced |
 | --- | --- | --- |
-| PR merge-triage (Phase C) | Blocks a merge until reviewer-bot threads are triaged with a fresh signed acknowledgement | Needs `gh` auth + a GitHub PR + an `.agent-backlog/` store + a triage workflow |
+| PR merge-triage | Blocks a merge until reviewer-bot threads are triaged with a fresh signed acknowledgement | Needs `gh` auth + a GitHub PR + an `.agent-backlog/` store + a triage workflow |
 | bot-thread fetch (lib) | Single source of truth for the reviewer-bot login pattern + thread hashing | Only useful as the shared library for the triage chain |
-| ship-pr-status engine | Read-only merge-state dump + next-action recommendation + JSON policy | ~1000 lines; was the engine of a project-specific merge skill |
+| merge-state engine | Read-only merge-state dump + next-action recommendation + JSON policy | ~1000 lines; the engine behind a project-specific merge workflow |
 | draft-mode + review-receipt gates | Forces PRs to enter as Draft and requires a local review receipt before push | Opinionated team workflow; would block a beginner's normal push |
 | worktree session-lock | Pins each agent session to its own worktree (multi-agent collision guard) | Pointless for a single agent in a single repo |
 | agent backlog | Files de-duplicated GitHub issues for out-of-scope findings | Needs a GitHub issues workflow + label conventions |
