@@ -29,6 +29,7 @@ jobs:
           bash tests/test-session-lock.sh
           bash tests/test-worktree-lock-install.sh
           bash tests/test-merge-triage.sh
+          bash tests/test-hookspath-guard.sh
   secrets:
     name: secret scan
     runs-on: ubuntu-latest

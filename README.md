@@ -94,6 +94,23 @@ fail-open**: if you use no review bot, or `gh` is unavailable, it does nothing.
 - Pick which bots count with `VIBEGUARD_BOT_PATTERN` (a regex).
 - Bypass once with `VIBEGUARD_SKIP_TRIAGE=1` before your merge command.
 
+## Worried about your hooks being silently bypassed? (optional)
+
+If an agent (or a stray command) redirects your repo's hooks somewhere harmless
+and then pushes, your pre-push checks are skipped without a trace. Install the
+**hooksPath push guard** to block a `git push` whenever the repo's **local**
+`core.hooksPath` has been pointed away from its default (or husky):
+
+```bash
+/path/to/vibeguard/install.sh --with-hookspath-guard
+```
+
+It reads the repo's live config at push time, so it catches the two-step bypass
+(`git config core.hooksPath ...` and then a later `git push`) that a
+single-command check cannot see. It looks at the **local** setting only, so a
+legitimate global hooks setup (e.g. git-templates) is left alone. Off by
+default, and (like the other opt-ins) wired for **Claude Code** only.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -116,6 +133,7 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | Worktree session-lock — one agent per worktree (multi-agent collision guard) | shipped (opt-in) |
 | PR merge-triage — block a merge until reviewer-bot threads are resolved | shipped (opt-in) |
 | Generic bot-review support (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor, custom) | shipped (opt-in) |
+| hooksPath push guard — block a push when the local `core.hooksPath` bypasses your hooks | shipped (opt-in) |
 | Draft-mode + review-receipt gates | v2, opt-in |
 | Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
 
