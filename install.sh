@@ -5,7 +5,8 @@ set -euo pipefail
 # Usage: ./install.sh [--with-worktree-lock] [--] [TARGET_REPO]   (default: current dir)
 #
 # Guarantees:
-#   - NEVER clobbers an existing .claude/settings.json (append-only jq merge + backup).
+#   - NEVER clobbers an existing .claude/settings.json (jq merge that adds hooks,
+#     reordering only the ordering-critical pwd-guard to the front; + backup).
 #   - Idempotent: re-running adds nothing if hooks already registered.
 #   - Registers the SAME core hooks for Claude (settings.json) AND Codex (.codex bridge).
 #

@@ -41,8 +41,11 @@ run "$R2"; ok $? 2 "live lock (alive pid + host match) -> BLOCK"
 R3=$(mkrepo); writelock "$R3" "$$" "$HOST" "$OLD"
 run "$R3"; ok $? 0 "stale by age -> overwrite (ALLOW)"
 
-# 4. stale by dead pid (host match) -> overwrite -> ALLOW
-R4=$(mkrepo); writelock "$R4" "999999" "$HOST" "$NOW"
+# 4. stale by dead pid (host match) -> overwrite -> ALLOW.
+# Spawn+reap a child so its PID is deterministically dead (no hard-coded 999999,
+# which can be alive on systems with a high pid_max / long uptime).
+R4=$(mkrepo); ( exit 0 ) & DEADPID=$!; wait "$DEADPID" 2>/dev/null
+writelock "$R4" "$DEADPID" "$HOST" "$NOW"
 run "$R4"; ok $? 0 "stale by dead pid -> overwrite (ALLOW)"
 
 # 5. host mismatch -> treated stale -> overwrite -> ALLOW
