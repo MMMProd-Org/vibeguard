@@ -2,10 +2,10 @@
 #
 # .claude/hooks/pre-tool-use-scope.sh — V4.0 (walk-up-tree scope resolution)
 #
-# PreToolUse hook (Edit|Write|NotebookEdit) : bloque les écritures hors du projet.
-# Opt-in par défaut : sans .session-scope.json, les écritures DANS le projet sont
-# autorisées (anti-brick) ; avec un scope file, refuse hors scopePaths. Fail-closed
-# sur hors-projet et sous VIBEGUARD_SCOPE_STRICT=1.
+# PreToolUse hook (Edit|Write|NotebookEdit): blocks writes outside the project.
+# Opt-in by default: without a .session-scope.json, writes INSIDE the project are
+# allowed (anti-brick); with a scope file, writes outside scopePaths are refused.
+# Fail-closed on out-of-project writes and under VIBEGUARD_SCOPE_STRICT=1.
 #
 # V4.0 changes vs V3.2:
 #   LOCK-V4-1 : Walk-up order leaf→root, first .session-scope.json wins
@@ -22,9 +22,9 @@ set -euo pipefail
 # LOCK-V4-15: fail-closed on empty/unset CLAUDE_PROJECT_DIR.
 # Without explicit guard, set -u catches unset (T11), but empty string ("") would
 # degrade case "${CLAUDE_PROJECT_DIR}"/*) to "/*" matching any absolute path
-# (Greptile P0 SECURITY: attacker-controlled scope file via walk-up).
+# (SECURITY: attacker-controlled scope file via walk-up).
 if [ -z "${CLAUDE_PROJECT_DIR:-}" ] || [ ! -d "${CLAUDE_PROJECT_DIR}" ]; then
-  echo "BLOCKED : CLAUDE_PROJECT_DIR non defini ou invalide." >&2
+  echo "BLOCKED : CLAUDE_PROJECT_DIR not set or invalid." >&2
   exit 2
 fi
 # M3: normalize CLAUDE_PROJECT_DIR trailing slash to prevent prefix-match failures.
@@ -44,7 +44,7 @@ realpath_portable() {
 }
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "BLOCKED : jq absent, hook sécurité non fiable." >&2
+  echo "BLOCKED : jq missing, security hook unreliable." >&2
   exit 2
 fi
 
@@ -66,7 +66,7 @@ trap log_telemetry EXIT
 INPUT=$(cat)
 
 TARGET=$(printf '%s' "$INPUT" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null) || {
-  echo "BLOCKED : input JSON invalide." >&2
+  echo "BLOCKED : invalid input JSON." >&2
   exit 2
 }
 
@@ -83,7 +83,7 @@ if [ -z "$TARGET" ]; then
     PATCH=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // .tool_input.input // .tool_input.patch // empty' 2>/dev/null || echo "")
     PATHS=$(printf '%s\n' "$PATCH" | sed -nE 's/^\*\*\* (Add|Update|Delete) File: (.+)$/\2/p; s/^\*\*\* Move to: (.+)$/\1/p')
     if [ -z "$PATHS" ]; then
-      echo "BLOCKED : apply_patch sans chemin parsable — scope non verifiable, fail-closed." >&2
+      echo "BLOCKED : apply_patch with no parseable path — scope unverifiable, fail-closed." >&2
       exit 2
     fi
     # Guard against recursion (synthesized subcall payloads carry file_path, so they
@@ -110,7 +110,7 @@ fi
 # P7 : refuse path traversal BEFORE walk-up
 case "$TARGET" in
   *..*)
-    echo "BLOCKED : path traversal détecté ($TARGET)." >&2
+    echo "BLOCKED : path traversal detected ($TARGET)." >&2
     exit 2
     ;;
 esac
@@ -119,7 +119,7 @@ esac
 case "$TARGET" in
   "${CLAUDE_PROJECT_DIR}"/*) ;;
   *)
-    echo "BLOCKED : path absolu hors projet ($TARGET)." >&2
+    echo "BLOCKED : absolute path outside project ($TARGET)." >&2
     exit 2
     ;;
 esac
@@ -208,11 +208,11 @@ if [ "$TARGET" = "${CLAUDE_PROJECT_DIR}/.session-scope.json" ]; then
     && jq empty "$TARGET" >/dev/null 2>&1; then
     OWNER_LLM=$(jq -r '.llm // empty' "$TARGET" 2>/dev/null || echo "")
     if [ -n "$OWNER_LLM" ] && [ "$OWNER_LLM" != "claude" ]; then
-      echo "BLOCKED : scope primaire possede par une autre session LLM (llm=$OWNER_LLM)." >&2
-      echo "Multi-LLM detecte → worktree dedie OBLIGATOIRE :" >&2
+      echo "BLOCKED : primary scope owned by another LLM session (llm=$OWNER_LLM)." >&2
+      echo "Multiple LLMs detected → a dedicated worktree is required:" >&2
       echo "  git worktree add ${CLAUDE_PROJECT_DIR}/.worktrees/<name> -b <branch> origin/main" >&2
       echo "  bash <your-worktree-bootstrap> ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
-      echo "Kill-switch audite : SCOPE_TAKEOVER=1 (uniquement sur demande humaine explicite)." >&2
+      echo "Audited kill-switch: SCOPE_TAKEOVER=1 (only on explicit human request)." >&2
       exit 2
     fi
   fi
@@ -223,19 +223,19 @@ if [ -n "$WORKTREE_ROOT" ] && [ "$TARGET" = "$WORKTREE_ROOT/.session-scope.json"
     echo "BLOCKED : worktree root symlink ($WORKTREE_ROOT)." >&2
     exit 2
   fi
-  # Cross-session guard also fences the worktree's OWN scope file (#1568 review): the
+  # Cross-session guard also fences the worktree's OWN scope file: the
   # control-plane repair hatch must NOT let a foreign session rewrite a VALID owned scope —
   # dropping/replacing sessionId there would defeat the guard for every later edit (the exact
-  # reused-worktree bypass this PR closes). Block ONLY when the scope is valid AND owned by a
+  # reused-worktree bypass this guard closes). Block ONLY when the scope is valid AND owned by a
   # different live session ; absent / corrupt / unstamped / own-session scopes stay repairable
   # (fail-OPEN, never self-lock). Mirrors LOCK-V4.1-9 above, keyed on sessionId instead of llm.
   if [ "${SCOPE_TAKEOVER:-0}" != "1" ] && [ -f "$TARGET" ] && jq empty "$TARGET" >/dev/null 2>&1; then
     _cur_session="${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}"
     _owner_session=$(jq -r '.sessionId // empty' "$TARGET" 2>/dev/null || echo "")
     if [ -n "$_cur_session" ] && [ -n "$_owner_session" ] && [ "$_owner_session" != "$_cur_session" ]; then
-      echo "BLOCKED : scope du worktree ${WORKTREE_ROOT##*/} possede par une autre session Claude (sessionId=${_owner_session}, courante=${_cur_session}) [cross-session guard]." >&2
-      echo "Le scope d'un worktree d'une autre session n'est pas reparable ici — cree le tien." >&2
-      echo "Kill-switch audite : SCOPE_TAKEOVER=1 (demande humaine explicite uniquement)." >&2
+      echo "BLOCKED : worktree scope ${WORKTREE_ROOT##*/} owned by another Claude session (sessionId=${_owner_session}, current=${_cur_session}) [cross-session guard]." >&2
+      echo "Another session's worktree scope is not repairable here — create your own." >&2
+      echo "Audited kill-switch: SCOPE_TAKEOVER=1 (explicit human request only)." >&2
       exit 2
     fi
   fi
@@ -264,7 +264,7 @@ find_scope_file() {
     # Split test : if symlink, emit diagnostic + continue walk-up (LOCK-V4-1 leaf→root preserved).
     # No readlink -f canonicalize on candidate — surgical refusal avoids LOCK-V4-1 walk-up semantics drift.
     if [ -L "$dir/.session-scope.json" ]; then
-      echo "REJECTED : $dir/.session-scope.json est un symlink (refusé EC-2, walk-up continue)." >&2
+      echo "REJECTED : $dir/.session-scope.json is a symlink (refused EC-2, walk-up continues)." >&2
     elif [ -f "$dir/.session-scope.json" ]; then
       printf '%s\n' "$dir/.session-scope.json"
       return 0
@@ -286,22 +286,22 @@ if ! SCOPE_FILE=$(find_scope_file "$TARGET"); then
     # LOCK-V4-2 : worktree without scope file → BLOCK with bootstrap message
     # Builtin parameter expansion (replaces fork: basename).
     WT_NAME="${WORKTREE_ROOT##*/}"
-    echo "BLOCKED : worktree ${WT_NAME} sans .session-scope.json." >&2
-    echo "Run :" >&2
+    echo "BLOCKED : worktree ${WT_NAME} without .session-scope.json." >&2
+    echo "Run:" >&2
     echo "  bash <your-worktree-bootstrap> ${CLAUDE_PROJECT_DIR}/.worktrees/${WT_NAME} --scope-template \"<objective>\"" >&2
     echo "" >&2
-    echo "Fallback vers primary scope est interdit pour les worktrees (LOCK-V4-2)." >&2
+    echo "Falling back to the primary scope is forbidden for worktrees (LOCK-V4-2)." >&2
     exit 2
   else
     # Outside .worktrees/ — fallback to primary scope file.
     # EC-2 hardening : symlinked primary scope refused with explicit diagnostic.
     if [ -L "${CLAUDE_PROJECT_DIR}/.session-scope.json" ]; then
-      echo "BLOCKED : ${CLAUDE_PROJECT_DIR}/.session-scope.json est un symlink (refusé EC-2)." >&2
+      echo "BLOCKED : ${CLAUDE_PROJECT_DIR}/.session-scope.json is a symlink (refused EC-2)." >&2
       exit 2
     elif [ -f "${CLAUDE_PROJECT_DIR}/.session-scope.json" ]; then
       SCOPE_FILE="${CLAUDE_PROJECT_DIR}/.session-scope.json"
     elif [ "${VIBEGUARD_SCOPE_STRICT:-0}" = "1" ]; then
-      echo "BLOCKED : .session-scope.json absent (VIBEGUARD_SCOPE_STRICT=1). Créer le scope avant écriture." >&2
+      echo "BLOCKED : .session-scope.json missing (VIBEGUARD_SCOPE_STRICT=1). Create the scope before writing." >&2
       exit 2
     else
       # vibeguard: scope restriction is OPT-IN. No .session-scope.json => feature
@@ -324,7 +324,7 @@ fi
 
 # Scope file corrupted ?
 if ! jq empty "$SCOPE_FILE" >/dev/null 2>&1; then
-  echo "BLOCKED : $SCOPE_FILE corrompu (JSON invalide)." >&2
+  echo "BLOCKED : $SCOPE_FILE corrupt (invalid JSON)." >&2
   exit 2
 fi
 
@@ -338,18 +338,23 @@ fi
 # layer (defense-in-depth — downstream target traversal check still applies, but scope entries
 # themselves should never contain `..` regardless of whether they ever match a target).
 SCOPE_ENTRIES=$(jq -r '(.scopePaths // [])[], (.forbiddenPaths // [])[] | select(. != "")' "$SCOPE_FILE")
-INVALID=$(printf '%s\n' "$SCOPE_ENTRIES" \
-  | grep -vE '/$|\.[a-zA-Z0-9]+$|^\.?[A-Za-z0-9_][A-Za-z0-9._-]*$|/[A-Za-z0-9_][A-Za-z0-9._-]*$' || true)
-# Match `..` only as a complete path SEGMENT (start-of-string or after `/`, then `..`, then
-# end-of-string or before `/`). Avoids false-positives on legitimate names like `version..bak`
-# or `foo..orig` while still catching `..`, `../foo`, `lib/..`, `lib/../etc`.
-TRAVERSAL=$(printf '%s\n' "$SCOPE_ENTRIES" | grep -E '(^|/)\.\.($|/)' || true)
-if [ -n "$INVALID" ] || [ -n "$TRAVERSAL" ]; then
-  echo "BLOCKED : paths invalides dans $SCOPE_FILE :" >&2
-  [ -n "$INVALID" ] && echo "$INVALID" >&2
-  [ -n "$TRAVERSAL" ] && echo "$TRAVERSAL  (path traversal in scope entry)" >&2
-  echo "Format requis : suffixe / pour dossiers, .ext pour fichiers, ou nom extensionless safe (Dockerfile, .envrc, etc.). Aucun segment .. autorisé dans les entrées de scope." >&2
-  exit 2
+# Only validate entry shapes when there ARE entries. With neither scopePaths nor
+# forbiddenPaths, SCOPE_ENTRIES is empty; skip here so the clearer "scopePaths empty"
+# diagnostic below handles that misconfig instead of a confusing "invalid paths" list.
+if [ -n "$SCOPE_ENTRIES" ]; then
+  INVALID=$(printf '%s\n' "$SCOPE_ENTRIES" \
+    | grep -vE '/$|\.[a-zA-Z0-9]+$|^\.?[A-Za-z0-9_][A-Za-z0-9._-]*$|/[A-Za-z0-9_][A-Za-z0-9._-]*$' || true)
+  # Match `..` only as a complete path SEGMENT (start-of-string or after `/`, then `..`, then
+  # end-of-string or before `/`). Avoids false-positives on legitimate names like `version..bak`
+  # or `foo..orig` while still catching `..`, `../foo`, `lib/..`, `lib/../etc`.
+  TRAVERSAL=$(printf '%s\n' "$SCOPE_ENTRIES" | grep -E '(^|/)\.\.($|/)' || true)
+  if [ -n "$INVALID" ] || [ -n "$TRAVERSAL" ]; then
+    echo "BLOCKED : invalid paths in $SCOPE_FILE :" >&2
+    [ -n "$INVALID" ] && echo "$INVALID" >&2
+    [ -n "$TRAVERSAL" ] && echo "$TRAVERSAL  (path traversal in scope entry)" >&2
+    echo "Required format: trailing / for directories, .ext for files, or a safe extensionless name (Dockerfile, .envrc, etc.). No .. segment allowed in scope entries." >&2
+    exit 2
+  fi
 fi
 
 # LOCK-V4-4 : REL relative to dirname(SCOPE_FILE), NOT always CLAUDE_PROJECT_DIR
@@ -357,12 +362,12 @@ fi
 SCOPE_DIR="${SCOPE_FILE%/*}"
 REL="${TARGET#${SCOPE_DIR}/}"
 
-# AC3 #1313 — tripwire "never main for dev under a foreign scope".
+# Tripwire: forbid dev on the primary tree under a foreign scope.
 # When governing a PRIMARY-tree edit (TARGET not under .worktrees/) via the PRIMARY root
 # scope, AND that root scope is owned by a FOREIGN/stale LLM session (.llm set, != claude),
 # forbid dev edits on the shared primary tree : the agent must use its own dedicated
 # .worktrees/<name> instead. This is the technical half of the hybrid guard that stops
-# multi-agent collision on the shared working tree (incident PR #1310). Narrow by design,
+# multi-agent collision on the shared working tree. Narrow by design,
 # mirroring LOCK-V4.1-9 : empty/legacy .llm OR .llm==claude → NOT a tripwire (cross-claude
 # sessions are indistinguishable at this layer) ; SCOPE_TAKEOVER=1 → audit-visible human
 # kill-switch. Control-plane / governance paths stay editable in primary even under a
@@ -376,22 +381,22 @@ if [ -z "$WORKTREE_ROOT" ] && [ "$SCOPE_FILE" = "${CLAUDE_PROJECT_DIR}/.session-
       # tree even under a foreign scope. `exit 0` (allow) — NOT a bare `;;` : a foreign
       # scope's narrow scopePaths (e.g. ["lib/"]) would otherwise block these downstream
       # at the scopePaths check, and the foreign root scope itself can't be amended
-      # (foreign-owner guard), leaving governance fixes deadlocked. (codex-connector #1315)
+      # (foreign-owner guard), leaving governance fixes deadlocked.
       CLAUDE.md|AGENTS.md|.session-scope.json) exit 0 ;;
       *)
-        echo "BLOCKED : dev sur le primary tree interdit sous scope foreign (llm=$TRIPWIRE_LLM) [AC3 #1313]." >&2
-        echo "Le repo principal n'est pas un terrain de dev quand un autre agent en possede le scope." >&2
-        echo "Cree un worktree dedie :" >&2
+        echo "BLOCKED : dev on the primary tree forbidden under a foreign scope (llm=$TRIPWIRE_LLM)." >&2
+        echo "The primary repo is not a dev area while another agent owns the scope." >&2
+        echo "Create a dedicated worktree:" >&2
         echo "  git worktree add ${CLAUDE_PROJECT_DIR}/.worktrees/<name> -b <branch> origin/main" >&2
         echo "  SCOPE_LLM=claude bash <your-worktree-bootstrap> ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
-        echo "Kill-switch audite : SCOPE_TAKEOVER=1 (demande humaine explicite uniquement)." >&2
+        echo "Audited kill-switch: SCOPE_TAKEOVER=1 (explicit human request only)." >&2
         exit 2
         ;;
     esac
   fi
 fi
 
-# Cross-session worktree ownership guard (#1313 follow-up — collision PR #1564).
+# Cross-session worktree ownership guard.
 # Inside a worktree, ownership belongs to exactly ONE Claude session : the one that
 # bootstrapped it (sessionId stamped at bootstrap from ${CLAUDE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-}}). A DIFFERENT
 # session reusing this worktree is the exact collision CLAUDE.md forbids ("chaque agent =
@@ -417,12 +422,12 @@ if [ -n "$WORKTREE_ROOT" ] && [ "${SCOPE_TAKEOVER:-0}" != "1" ]; then
     OWNER_SESSION=$(jq -r '.sessionId // empty' "$WT_ROOT_SCOPE" 2>/dev/null || echo "")
     if [ -n "$OWNER_SESSION" ] && [ "$OWNER_SESSION" != "$CUR_SESSION" ]; then
       WT_NAME="${WORKTREE_ROOT##*/}"
-      echo "BLOCKED : worktree ${WT_NAME} appartient a une autre session Claude (sessionId=${OWNER_SESSION}, session courante=${CUR_SESSION}) [cross-session guard]." >&2
-      echo "Chaque agent = son propre worktree (JAMAIS partager — incident PR #1564)." >&2
-      echo "Cree le tien :" >&2
+      echo "BLOCKED : worktree ${WT_NAME} belongs to another Claude session (sessionId=${OWNER_SESSION}, current session=${CUR_SESSION}) [cross-session guard]." >&2
+      echo "Each agent gets its own worktree (NEVER share them)." >&2
+      echo "Create your own:" >&2
       echo "  git worktree add ${CLAUDE_PROJECT_DIR}/.worktrees/<name> -b <branch> origin/main" >&2
       echo "  SCOPE_LLM=claude bash <your-worktree-bootstrap> ${CLAUDE_PROJECT_DIR}/.worktrees/<name> --scope-template \"<objective>\"" >&2
-      echo "Kill-switch audite : SCOPE_TAKEOVER=1 (demande humaine explicite uniquement)." >&2
+      echo "Audited kill-switch: SCOPE_TAKEOVER=1 (explicit human request only)." >&2
       exit 2
     fi
   fi
@@ -434,7 +439,7 @@ while IFS= read -r F; do
   [ -z "$F" ] && continue
   case "$REL" in
     "$F"*)
-      echo "BLOCKED : $REL dans forbiddenPaths ($F) [scope=$SCOPE_FILE]." >&2
+      echo "BLOCKED : $REL in forbiddenPaths ($F) [scope=$SCOPE_FILE]." >&2
       exit 2
       ;;
   esac
@@ -449,8 +454,8 @@ while IFS= read -r S; do
 done < <(jq -r '.scopePaths[]? // empty' "$SCOPE_FILE")
 
 if [ ${#SCOPED_ENTRIES[@]} -eq 0 ]; then
-  echo "BLOCKED : scopePaths vide dans $SCOPE_FILE." >&2
-  echo "Définir au moins un path autorisé avant écriture." >&2
+  echo "BLOCKED : scopePaths empty in $SCOPE_FILE." >&2
+  echo "Define at least one allowed path before writing." >&2
   exit 2
 fi
 
@@ -474,8 +479,8 @@ for S in "${SCOPED_ENTRIES[@]}"; do
   esac
 done
 
-echo "BLOCKED : $REL hors scopePaths [scope=$SCOPE_FILE]." >&2
-echo "Scope actuel :" >&2
+echo "BLOCKED : $REL outside scopePaths [scope=$SCOPE_FILE]." >&2
+echo "Current scope:" >&2
 printf '  %s\n' "${SCOPED_ENTRIES[@]}" >&2
-echo "Pour étendre : modifier $SCOPE_FILE explicitement puis retry." >&2
+echo "To extend: edit $SCOPE_FILE explicitly, then retry." >&2
 exit 2

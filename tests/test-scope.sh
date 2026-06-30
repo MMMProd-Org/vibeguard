@@ -26,5 +26,12 @@ feed "$SL" "$SL/escape/evil.txt"; ok $? 2 "symlink parent -> outside project -> 
 touch "$SL/real.txt"; ln -s "$SL/real.txt" "$SL/inside"   # symlink inside project -> inside
 feed "$SL" "$SL/inside";          ok $? 0 "symlink -> inside project -> ALLOW (canonicalized)"
 
+# diag: empty scopePaths -> clear "scopePaths empty", not confusing "invalid paths"
+PE="$(cd "$(mktemp -d)" && pwd -P)"; mkdir -p "$PE/src"
+echo '{"scopePaths":[]}' > "$PE/.session-scope.json"
+feed "$PE" "$PE/src/a.ts"; ok $? 2 "empty scopePaths -> BLOCK"
+emsg=$(printf '%s' "$(jq -nc --arg p "$PE/src/a.ts" '{tool_name:"Write",tool_input:{file_path:$p}}')" | env CLAUDE_PROJECT_DIR="$PE" bash "$HOOK" 2>&1 >/dev/null)
+case "$emsg" in *"scopePaths empty"*) ok 0 0 "empty scopePaths -> clear message (not 'invalid paths')";; *) ok 1 0 "empty scopePaths msg wrong: $emsg";; esac
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
