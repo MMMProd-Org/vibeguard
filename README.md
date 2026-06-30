@@ -76,6 +76,24 @@ It records a small lock file when a session starts, and blocks shell commands
 whose working directory has drifted outside the locked worktree. It is off by
 default because a single agent in a single repo does not need it.
 
+## Using a code-review bot? (optional)
+
+If you open pull requests and let a review bot (CodeRabbit, Qodo, Copilot,
+Greptile, Sourcery, ...) comment on them, install the **merge-triage gate** so a
+PR cannot be merged while the bot still has **unresolved** review conversations:
+
+```bash
+/path/to/vibeguard/install.sh --with-merge-triage
+```
+
+When you ask the AI to merge a PR, the gate checks the PR's review threads. If a
+bot left feedback you have not resolved yet, the merge is blocked until you
+triage and resolve those conversations on GitHub. It is **advisory and
+fail-open**: if you use no review bot, or `gh` is unavailable, it does nothing.
+
+- Pick which bots count with `VIBEGUARD_BOT_PATTERN` (a regex).
+- Bypass once with `VIBEGUARD_SKIP_TRIAGE=1` before your merge command.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -96,8 +114,8 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | Risky-command guard (stage-all, skip-git-checks, force-clean, world-writable) | shipped |
 | Stay-in-your-project scope guard (+ optional `.session-scope.json`) | shipped |
 | Worktree session-lock — one agent per worktree (multi-agent collision guard) | shipped (opt-in) |
-| PR merge-triage — block a merge until reviewer-bot threads are triaged | v2, opt-in |
-| Generic bot-review support (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor) | v2, opt-in |
+| PR merge-triage — block a merge until reviewer-bot threads are resolved | shipped (opt-in) |
+| Generic bot-review support (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor, custom) | shipped (opt-in) |
 | Draft-mode + review-receipt gates | v2, opt-in |
 | Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
 

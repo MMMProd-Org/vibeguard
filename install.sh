@@ -21,6 +21,7 @@ VG_SRC="$(cd "$(dirname "$0")" && pwd)"
 # `--` ends option parsing (so a TARGET path may start with `-`); extra
 # positionals are a hard error rather than a silent last-wins.
 WITH_LOCK=0
+WITH_TRIAGE=0
 TARGET=""
 TARGET_SET=0
 END_OPTS=0
@@ -29,7 +30,8 @@ while [ $# -gt 0 ]; do
     case "$1" in
       --) END_OPTS=1; shift; continue ;;
       --with-worktree-lock) WITH_LOCK=1; shift; continue ;;
-      -h|--help) echo "Usage: ./install.sh [--with-worktree-lock] [--] [TARGET_REPO]"; exit 0 ;;
+      --with-merge-triage) WITH_TRIAGE=1; shift; continue ;;
+      -h|--help) echo "Usage: ./install.sh [--with-worktree-lock] [--with-merge-triage] [--] [TARGET_REPO]"; exit 0 ;;
       -*) echo "vibeguard: unknown option $1" >&2; exit 1 ;;
     esac
   fi
@@ -59,6 +61,11 @@ if [ "$WITH_LOCK" = "1" ]; then
   CLAUDE_HOOKS+=("pre-tool-use-pwd-guard.sh:PreToolUse:Bash" "session-start.sh:SessionStart:")
 fi
 CLAUDE_HOOKS+=( "${HOOKS[@]}" )
+# Opt-in PR merge-triage gate (Claude only). Appended: it gates `gh pr merge`
+# and has no ordering dependency on the other Bash guards.
+if [ "$WITH_TRIAGE" = "1" ]; then
+  CLAUDE_HOOKS+=("pre-tool-use-merge-triage.sh:PreToolUse:Bash")
+fi
 
 # register_hook <json-file> <command> <event> <matcher> [append|prepend]
 # Idempotent: rewrites the file only when the merge changes it.
@@ -139,5 +146,6 @@ cmp -s "$CXSNAP" "$CX" || cp "$CXSNAP" "$CX.vibeguard-bak.$(date +%s 2>/dev/null
 rm -f "$CXSNAP"
 
 LOCK_NOTE=""
-[ "$WITH_LOCK" = "1" ] && LOCK_NOTE=" + worktree session-lock (Claude)"
+[ "$WITH_LOCK" = "1" ] && LOCK_NOTE="$LOCK_NOTE + worktree session-lock (Claude)"
+[ "$WITH_TRIAGE" = "1" ] && LOCK_NOTE="$LOCK_NOTE + merge-triage (Claude)"
 echo "vibeguard: installed ${#HOOKS[@]} core hook(s)$LOCK_NOTE into $TARGET (Claude + Codex). Backups: *.vibeguard-bak.*"
