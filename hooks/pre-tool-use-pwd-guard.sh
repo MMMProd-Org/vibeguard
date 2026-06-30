@@ -44,11 +44,11 @@ fi
 
 # Corrupted JSON OR missing project_dir -> fail-closed BLOCK.
 if ! LOCK_PROJECT_DIR=$(jq -r '.project_dir // empty' "$LOCK_FILE" 2>/dev/null); then
-  echo "BLOCKED: $LOCK_FILE parse failed (jq). Inspect it, then delete it: rm $LOCK_FILE" >&2
+  echo "BLOCKED: $LOCK_FILE parse failed (jq). Inspect it, then delete it: rm -- \"$LOCK_FILE\"" >&2
   exit 2
 fi
 if [ -z "$LOCK_PROJECT_DIR" ]; then
-  echo "BLOCKED: $LOCK_FILE corrupted (empty project_dir). Inspect it, then delete it: rm $LOCK_FILE" >&2
+  echo "BLOCKED: $LOCK_FILE corrupted (empty project_dir). Inspect it, then delete it: rm -- \"$LOCK_FILE\"" >&2
   exit 2
 fi
 
@@ -81,7 +81,7 @@ PROJECT_CANON=$(realpath_portable "$PROJECT_DIR" || echo "$PROJECT_DIR")
 PROJECT_CANON="${PROJECT_CANON%/}"
 if [ "$LOCK_CANON" != "$PROJECT_CANON" ]; then
   echo "BLOCKED: lock project_dir ($LOCK_CANON) does not match this worktree ($PROJECT_CANON) - tampered/stale lock." >&2
-  echo "Inspect it, then delete it: rm $LOCK_FILE" >&2
+  echo "Inspect it, then delete it: rm -- \"$LOCK_FILE\"" >&2
   exit 2
 fi
 

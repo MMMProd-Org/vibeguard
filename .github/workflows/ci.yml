@@ -27,6 +27,7 @@ jobs:
           bash tests/test-do-release.sh
           bash tests/test-pwd-guard.sh
           bash tests/test-session-lock.sh
+          bash tests/test-worktree-lock-install.sh
   secrets:
     name: secret scan
     runs-on: ubuntu-latest

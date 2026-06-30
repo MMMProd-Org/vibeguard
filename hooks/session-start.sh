@@ -71,11 +71,11 @@ acquire_session_lock() {
       || ! existing_host=$(jq -r '.host // empty' "$lock_file" 2>/dev/null) \
       || ! existing_started_at=$(jq -r '.started_at // empty' "$lock_file" 2>/dev/null) \
       || ! existing_project_dir=$(jq -r '.project_dir // empty' "$lock_file" 2>/dev/null); then
-      echo "BLOCKED: $lock_file corrupted (jq parse fail). Inspect it, then delete it: rm $lock_file" >&2
+      echo "BLOCKED: $lock_file corrupted (jq parse fail). Inspect it, then delete it: rm -- \"$lock_file\"" >&2
       exit 2
     fi
     if [ -z "$existing_pid" ] || [ -z "$existing_host" ] || [ -z "$existing_started_at" ] || [ -z "$existing_project_dir" ]; then
-      echo "BLOCKED: $lock_file corrupted (empty pid/host/started_at/project_dir). Inspect it, then delete it: rm $lock_file" >&2
+      echo "BLOCKED: $lock_file corrupted (empty pid/host/started_at/project_dir). Inspect it, then delete it: rm -- \"$lock_file\"" >&2
       exit 2
     fi
     # Pid integer validation: non-numeric -> corrupted lock, fail-closed BLOCK
@@ -83,7 +83,7 @@ acquire_session_lock() {
     # dead pid -> overwrite, which is a fail-open bypass).
     case "$existing_pid" in
       ''|*[!0-9]*)
-        echo "BLOCKED: $lock_file corrupted (non-numeric pid: '$existing_pid'). Inspect it, then delete it: rm $lock_file" >&2
+        echo "BLOCKED: $lock_file corrupted (non-numeric pid: '$existing_pid'). Inspect it, then delete it: rm -- \"$lock_file\"" >&2
         exit 2
         ;;
     esac
@@ -133,7 +133,7 @@ acquire_session_lock() {
         age_msg="started_at=${existing_started_at}"
       fi
       echo "BLOCKED: worktree ${worktree_root} held by lock_id ${existing_lock_id} ${age_msg}." >&2
-      echo "If the owning session is dead/inactive, wait for the TTL or: rm ${lock_file}" >&2
+      echo "If the owning session is dead/inactive, wait for the TTL or: rm -- \"$lock_file\"" >&2
       exit 2
     fi
     # Stale -> fall through to overwrite.
