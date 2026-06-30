@@ -70,15 +70,15 @@ realpath_portable() {
 LOCK_CANON=$(realpath_portable "$LOCK_PROJECT_DIR" || echo "$LOCK_PROJECT_DIR")
 PWD_CANON=$(pwd -P 2>/dev/null || pwd)
 
-# Normalize trailing slash.
-LOCK_CANON="${LOCK_CANON%/}"
-PWD_CANON="${PWD_CANON%/}"
+# Normalize trailing slash, but keep root "/" intact (%/ would empty it).
+LOCK_CANON="${LOCK_CANON%/}"; [ -z "$LOCK_CANON" ] && LOCK_CANON="/"
+PWD_CANON="${PWD_CANON%/}"; [ -z "$PWD_CANON" ] && PWD_CANON="/"
 
 # Tamper check: the lock's project_dir must match the worktree the lock lives in.
 # A parseable-but-tampered lock (e.g. project_dir "/") would otherwise make the
 # prefix check below pass for any cwd, silently bypassing the drift guard.
 PROJECT_CANON=$(realpath_portable "$PROJECT_DIR" || echo "$PROJECT_DIR")
-PROJECT_CANON="${PROJECT_CANON%/}"
+PROJECT_CANON="${PROJECT_CANON%/}"; [ -z "$PROJECT_CANON" ] && PROJECT_CANON="/"
 if [ "$LOCK_CANON" != "$PROJECT_CANON" ]; then
   echo "BLOCKED: lock project_dir ($LOCK_CANON) does not match this worktree ($PROJECT_CANON) - tampered/stale lock." >&2
   echo "Inspect it, then delete it: rm -- \"$LOCK_FILE\"" >&2

@@ -45,6 +45,9 @@ acquire_session_lock() {
     worktree_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
   fi
   [ -z "$worktree_root" ] && return 0
+  # Resolved path must be an existing directory: never mkdir -p / write a lock
+  # under a mistyped CLAUDE_PROJECT_DIR.
+  [ -d "$worktree_root" ] || return 0
 
   lock_dir="$worktree_root/.claude"
   lock_file="$lock_dir/.session-lock.json"

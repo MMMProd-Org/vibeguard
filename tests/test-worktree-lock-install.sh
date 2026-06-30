@@ -32,6 +32,8 @@ bash=[e for e in pre if e.get("matcher")=="Bash"]; other=[e for e in pre if e.ge
 pg=[e for e in bash if "pwd-guard" in e["hooks"][0]["command"]]; rest=[e for e in bash if "pwd-guard" not in e["hooks"][0]["command"]]
 d["hooks"]["PreToolUse"]=other+rest+pg; json.dump(d,open(f,"w"))
 PY
+# confirm the setup really put pwd-guard LAST before testing the heal
+case "$(bash_order "$R3")" in *,pre-tool-use-pwd-guard.sh) ok 0 0 "self-heal setup: pwd-guard moved last";; *) ok 1 0 "self-heal setup failed: $(bash_order "$R3")";; esac
 bash "$VG/install.sh" --with-worktree-lock "$R3" >/dev/null 2>&1
 case "$(bash_order "$R3")" in pre-tool-use-pwd-guard.sh,*) ok 0 0 "self-heal: misordered -> pwd-guard first again";; *) ok 1 0 "self-heal order: $(bash_order "$R3")";; esac
 
