@@ -66,5 +66,18 @@ grep -q 'pr=77' "$GBR" && ok 1 0 "branch merge must NOT use current-branch pr (7
 feed "gh pr merge -R owner/repo" PATH="$FBR:$PATH" >/dev/null 2>&1
 grep -q 'pr=77' "$GBR" && ok 0 0 "no positional still uses current-branch pr (77)" || ok 1 0 "no-arg regression: $(cat "$GBR")"
 
+
+# value-taking flag (-t subject) must NOT be parsed as a branch positional (Codex P2)
+GFA=$(mktemp); FFA=$(mktemp -d)
+printf '#!/bin/sh\ncase "$*" in\n*"pr view release"*) echo 88 ;;\n*"pr view"*) echo 77 ;;\n*"api graphql"*) echo "$@" >> "%s"; exit 1 ;;\n*) exit 1 ;;\nesac\n' "$GFA" > "$FFA/gh"; chmod +x "$FFA/gh"
+feed "gh pr merge -t release -R owner/repo" PATH="$FFA:$PATH" >/dev/null 2>&1
+grep -q 'pr=77' "$GFA" && ok 0 0 "flag value not a branch -> current-branch pr (77)" || ok 1 0 "flag-value: $(cat "$GFA")"
+grep -q 'pr=88' "$GFA" && ok 1 0 "must NOT treat -t value as a branch" || ok 0 0 "ignores -t flag value as positional"
+# explicit branch with no PR must fail-open, NOT fall back to current-branch pr (Copilot)
+GFB=$(mktemp); FFB=$(mktemp -d)
+printf '#!/bin/sh\ncase "$*" in\n*"pr view ghost"*) exit 1 ;;\n*"pr view"*) echo 77 ;;\n*"api graphql"*) echo "$@" >> "%s"; exit 1 ;;\n*) exit 1 ;;\nesac\n' "$GFB" > "$FFB/gh"; chmod +x "$FFB/gh"
+feed "gh pr merge ghost -R owner/repo" PATH="$FFB:$PATH" >/dev/null 2>&1
+grep -q 'pr=77' "$GFB" && ok 1 0 "unresolved branch must NOT check current-branch pr (77)" || ok 0 0 "unresolved branch -> fail-open, no wrong-PR check"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

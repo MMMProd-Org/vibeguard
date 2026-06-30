@@ -50,18 +50,29 @@ else
   # positional numeric token (skipping flags and the owner/repo value), then a
   # /pull/N url in that same tail, then gh pr view.
   after=$(printf '%s' "$CMD" | sed -E 's/^.*gh pr merge[[:space:]]*//')
-  PR=""; BRANCH=""
+  PR=""; BRANCH=""; skip_next=0
   # shellcheck disable=SC2086  # intentional word-split to tokenize the command
   for tok in $after; do
-    case "$tok" in -*) continue ;; */*) continue ;; *[!0-9]*) BRANCH="$tok"; break ;; *) PR="$tok"; break ;; esac
+    # value-taking flags (-t/-b/-R/...) consume the NEXT token; skip it so a flag
+    # value (e.g. a subject after -t) is not misread as a positional branch name.
+    if [ "$skip_next" = 1 ]; then skip_next=0; continue; fi
+    case "$tok" in
+      -b|--body|-F|--body-file|--author-email|--match-head-commit|-R|--repo|-t|--subject) skip_next=1; continue ;;
+      -*) continue ;;
+      */*) continue ;;
+      *[!0-9]*) BRANCH="$tok"; break ;;
+      *) PR="$tok"; break ;;
+    esac
   done
   [ -n "$PR" ] || PR=$(printf '%s' "$after" | grep -oE 'pull/[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
-  # A positional branch name (by-branch, not by-number) resolves to ITS PR, not
-  # the current branch's -- else the gate checks the wrong PR's threads (false-neg).
+  # A positional branch name resolves to ITS OWN PR. An explicit selector that does
+  # NOT resolve must not fall through to the current branch (that checks the wrong
+  # PR's threads) -- keep PR empty and fail-open instead.
   # ponytail: slash-free names only; a team/branch form is skipped as an owner/repo
   # token above and falls through to the current-branch lookup (rare, acceptable).
   if [ -z "$PR" ] && [ -n "$BRANCH" ]; then
     PR=$(gh pr view "$BRANCH" -R "$REPO" --json number -q '.number' 2>/dev/null || echo "")
+    [ -n "$PR" ] || exit 0
   fi
   [ -n "$PR" ] || PR=$(gh pr view -R "$REPO" --json number -q '.number' 2>/dev/null || echo "")
   [ -n "$PR" ] || exit 0                                        # no PR -> allow
