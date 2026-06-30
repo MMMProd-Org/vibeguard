@@ -47,9 +47,10 @@ PY
 bash "$VG/install.sh" --with-worktree-lock "$R3" >/dev/null 2>&1
 grep -q USERHOOK "$R3/.claude/settings.json" && ok 0 0 "co-located user hook preserved (never clobbers)" || ok 1 0 "co-located user hook clobbered"
 
-# idempotence
-b=$(md5sum "$R/.claude/settings.json"|cut -d' ' -f1); bash "$VG/install.sh" --with-worktree-lock "$R" >/dev/null 2>&1; a=$(md5sum "$R/.claude/settings.json"|cut -d' ' -f1)
-ok "$b" "$a" "re-run is idempotent (no settings change)"
+# idempotence (cmp -s is POSIX; md5sum is absent on stock macOS)
+cp "$R/.claude/settings.json" "$R/.snap"
+bash "$VG/install.sh" --with-worktree-lock "$R" >/dev/null 2>&1
+if cmp -s "$R/.snap" "$R/.claude/settings.json"; then ok 0 0 "re-run is idempotent (no settings change)"; else ok 1 0 "re-run is idempotent (no settings change)"; fi
 
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
