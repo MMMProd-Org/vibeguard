@@ -31,6 +31,9 @@ feed "$(printf 'echo prep\ngh pr create --draft')"; ok $? 0 "newline-separated g
 # a flag inside a trailing comment is not a real flag bash passes.
 feed "gh pr create -t t # --draft";              ok $? 2 "--draft only in a comment -> BLOCK"
 feed "gh pr create --draft # ready note";        ok $? 0 "real --draft + trailing comment -> allow"
+# a # inside a quoted arg is not a comment, so the real --draft is kept.
+feed "gh pr create -t 'fix #123' --draft";       ok $? 0 "quoted hash in title + --draft -> allow"
+feed "gh pr create -t \"Fix #9\" -b txt";         ok $? 2 "quoted hash in title, no --draft -> BLOCK"
 
 feed "gh pr create -t t" PATH="/nonexistent";    ok $? 2 "jq absent -> BLOCK (fail-closed)"
 

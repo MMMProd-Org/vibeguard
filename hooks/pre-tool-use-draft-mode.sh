@@ -30,19 +30,36 @@ GH_WRAPPER_RE='([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+|env([[:space:]]+(-[^[:space
 GH_BIN_RE='([^[:space:]]*/)?(\\)?gh'
 GH_COMMAND_RE="^[[:space:]]*([({][[:space:]]*)*(${GH_WRAPPER_RE})*${GH_BIN_RE}[[:space:]]+"
 
+# strip_comment <line> : drop a trailing shell comment, but only a `#` that is
+# OUTSIDE single/double quotes and at a word boundary (start or after space), so
+# a `#` inside a quoted arg -- `gh pr create -t 'fix #123' --draft` -- is kept and
+# the real --draft is not lost. Basic quote tracking (no escaped-quote handling).
+strip_comment() {
+  awk '{
+    q=""; out="";
+    for (i=1; i<=length($0); i++) {
+      c=substr($0,i,1);
+      if (q!="") { out=out c; if (c==q) q=""; continue }
+      if (c=="\"" || c=="\047") { q=c; out=out c; continue }
+      if (c=="#" && (i==1 || substr($0,i-1,1) ~ /[[:space:]]/)) break;
+      out=out c;
+    }
+    print out
+  }' <<<"$1"
+}
+
 while IFS= read -r SEG; do
-  # Drop a trailing shell comment (a `#` after whitespace/start) so a flag in
-  # a comment -- `gh pr create -t t # --draft` -- is not mistaken for a real
-  # flag bash would pass. A `#` glued to a token ('#5') is left intact.
-  SEG=$(printf '%s' "$SEG" | sed -E 's/(^|[[:space:]])#.*$//')
+  # Drop a trailing shell comment (quote-aware) so a flag that only appears in
+  # a comment -- `gh pr create -t t # --draft` -- is not mistaken for a real one.
+  SEG=$(strip_comment "$SEG")
   grep -qE "$GH_COMMAND_RE" <<<"$SEG" || continue
 
   # 1. `gh pr create` must be --draft.
   if grep -qE "${GH_COMMAND_RE}[^|;&]*pr[[:space:]]+create([[:space:]]|$)" <<<"$SEG"; then
     if ! grep -qE '(^|[[:space:]])--draft([[:space:]]|$)' <<<"$SEG"; then
       echo "BLOCKED : gh pr create without --draft." >&2
-      echo "Draft-review mode: open the PR as a Draft so review bots / humans can look" >&2
-      echo "before CI runs, then mark it ready once reviews are settled." >&2
+      echo "Draft-review mode: open the PR as a Draft (a not-ready-for-review signal)" >&2
+      echo "and mark it ready only once the reviews are settled." >&2
       exit 2
     fi
   fi
