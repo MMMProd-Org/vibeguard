@@ -108,7 +108,8 @@ and then pushes, your pre-push checks are skipped without a trace. Install the
 It reads the repo's live config at push time, so it catches the two-step bypass
 (`git config core.hooksPath ...` and then a later `git push`) that a
 single-command check cannot see. It looks at the **local** setting only, so a
-legitimate global hooks setup (e.g. git-templates) is left alone. Off by default.
+legitimate global hooks setup (e.g. git-templates) is left alone. Off by
+default, and (like the other opt-ins) wired for **Claude Code** only.
 
 ## Turning it off
 

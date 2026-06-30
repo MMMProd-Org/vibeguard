@@ -31,13 +31,25 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) |
 # Known limitation: a literal "git push" inside a string argument (rg "git push",
 # sed 's/git push//') may match -- real shell tokenisation is not feasible in
 # bash. A conservative footgun trade-off (same as the upstream guard).
-echo "$CMD" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^[:space:]]+[[:space:]]+)*push([[:space:]]|$|;|&|\|)' || exit 0
+printf '%s\n' "$CMD" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^[:space:]]+[[:space:]]+)*push([[:space:]]|$|;|&|\|)' || exit 0
 
 # Resolve the target repo: honour `git -C <path>`, else the current directory.
-TARGET_REPO=$(echo "$CMD" | sed -nE 's/.*git[[:space:]]+(.*[[:space:]]+)?-C[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+TARGET_REPO=$(printf '%s\n' "$CMD" | sed -nE 's/.*git[[:space:]]+(.*[[:space:]]+)?-C[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+# Strip ONE layer of surrounding matching quotes the shell would remove, so
+# `git -C '/repo' push` resolves to /repo (else a quoted -C path silently
+# became "non-repo" and skipped the check).
+TARGET_REPO="${TARGET_REPO#\'}"; TARGET_REPO="${TARGET_REPO%\'}"
+TARGET_REPO="${TARGET_REPO#\"}"; TARGET_REPO="${TARGET_REPO%\"}"
 [ -z "$TARGET_REPO" ] && TARGET_REPO="."
 
 # Not a git repo -> the push is not ours to judge, allow (graceful no-op).
+# Residual (documented, seatbelt-not-vault): a -C path containing SPACES is
+# truncated by the word-based parse above and reads as non-repo here -> allowed.
+# Closing it needs real shell tokenisation; an agent deliberately quoting a
+# spaced path to evade is out of scope (the danger guard's same trade-off).
+# Same status for repo targeting via --git-dir/--work-tree (uncommon for the
+# vibe-coder audience): only `git -C <path>` is parsed; other forms fall back
+# to the current directory. Footgun prevention, not an adversarial sandbox.
 git -C "$TARGET_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 
 # Live LOCAL core.hooksPath. A runtime `git config core.hooksPath X` writes here

@@ -39,6 +39,12 @@ GCFG=$(mktemp)
 git config --file "$GCFG" core.hooksPath "/home/dev/.git-templates/hooks"
 feed "git -C $R2 push" GIT_CONFIG_GLOBAL="$GCFG";  ok $? 0 "global hooksPath, no local -> allow (no false-positive)"
 
+# quoted -C path must dequote and resolve (else a quoted -C silently bypassed).
+git -C "$R" config core.hooksPath "/tmp/evil-no-hooks"
+feed "git -C '$R' push";                        ok $? 2 "quoted -C + redirected hooksPath -> BLOCK (dequoted)"
+git -C "$R" config core.hooksPath ".husky"
+feed "git -C \"$R\" push";                       ok $? 0 "double-quoted -C + safe hooksPath -> allow (dequoted)"
+
 # non-git target -> graceful allow
 NG=$(mktemp -d)
 feed "git -C $NG push";                          ok $? 0 "push targeting non-git dir -> allow (no-op)"
