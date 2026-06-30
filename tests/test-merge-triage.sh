@@ -54,5 +54,17 @@ grep -q 'pr=42' "$GHLOG" && ok 0 0 "subject pull/99 ignored, positional 42 used"
 feed "gh pr merge -R owner/repo https://github.com/owner/repo/pull/7" PATH="$FB:$PATH" >/dev/null 2>&1
 grep -q 'pr=7' "$GHLOG" && ok 0 0 "pull/N url parsed as PR" || ok 1 0 "url: $(cat "$GHLOG")"
 
+
+# branch-name positional: `gh pr merge feature-x` must resolve feature-x's OWN pr,
+# not the current branch's (else the gate checks the wrong PR -> false-negative).
+GBR=$(mktemp); FBR=$(mktemp -d)
+printf '#!/bin/sh\ncase "$*" in\n*"pr view feature-x"*) echo 50 ;;\n*"pr view"*) echo 77 ;;\n*"api graphql"*) echo "$@" >> "%s"; exit 1 ;;\n*) exit 1 ;;\nesac\n' "$GBR" > "$FBR/gh"; chmod +x "$FBR/gh"
+feed "gh pr merge feature-x -R owner/repo" PATH="$FBR:$PATH" >/dev/null 2>&1
+grep -q 'pr=50' "$GBR" && ok 0 0 "branch-name merge resolves ITS pr (50)" || ok 1 0 "branch resolve: $(cat "$GBR")"
+grep -q 'pr=77' "$GBR" && ok 1 0 "branch merge must NOT use current-branch pr (77)" || ok 0 0 "ignores wrong current-branch pr on branch merge"
+: > "$GBR"
+feed "gh pr merge -R owner/repo" PATH="$FBR:$PATH" >/dev/null 2>&1
+grep -q 'pr=77' "$GBR" && ok 0 0 "no positional still uses current-branch pr (77)" || ok 1 0 "no-arg regression: $(cat "$GBR")"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

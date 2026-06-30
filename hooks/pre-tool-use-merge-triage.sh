@@ -50,12 +50,19 @@ else
   # positional numeric token (skipping flags and the owner/repo value), then a
   # /pull/N url in that same tail, then gh pr view.
   after=$(printf '%s' "$CMD" | sed -E 's/^.*gh pr merge[[:space:]]*//')
-  PR=""
+  PR=""; BRANCH=""
   # shellcheck disable=SC2086  # intentional word-split to tokenize the command
   for tok in $after; do
-    case "$tok" in -*) continue ;; */*) continue ;; *[!0-9]*) break ;; *) PR="$tok"; break ;; esac
+    case "$tok" in -*) continue ;; */*) continue ;; *[!0-9]*) BRANCH="$tok"; break ;; *) PR="$tok"; break ;; esac
   done
   [ -n "$PR" ] || PR=$(printf '%s' "$after" | grep -oE 'pull/[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+  # A positional branch name (by-branch, not by-number) resolves to ITS PR, not
+  # the current branch's -- else the gate checks the wrong PR's threads (false-neg).
+  # ponytail: slash-free names only; a team/branch form is skipped as an owner/repo
+  # token above and falls through to the current-branch lookup (rare, acceptable).
+  if [ -z "$PR" ] && [ -n "$BRANCH" ]; then
+    PR=$(gh pr view "$BRANCH" -R "$REPO" --json number -q '.number' 2>/dev/null || echo "")
+  fi
   [ -n "$PR" ] || PR=$(gh pr view -R "$REPO" --json number -q '.number' 2>/dev/null || echo "")
   [ -n "$PR" ] || exit 0                                        # no PR -> allow
   # Fetch ALL review threads. gh --paginate auto-follows $endCursor (GraphQL caps
