@@ -45,5 +45,14 @@ grep -q 'repo=repo' "$GHLOG" && ok 0 0 "honors -R owner/repo override" || ok 1 0
 feed "gh pr merge -R owner/repo 42" PATH="$FB:$PATH" >/dev/null 2>&1
 grep -q 'pr=42' "$GHLOG" && ok 0 0 "PR after -R owner/repo still parsed (not stopped on '/')" || ok 1 0 "reordered: $(cat "$GHLOG")"
 
+# a pull/N inside a -t subject must NOT be picked up as the PR
+: > "$GHLOG"
+feed "gh pr merge -R owner/repo 42 -t 'see pull/99'" PATH="$FB:$PATH" >/dev/null 2>&1
+grep -q 'pr=42' "$GHLOG" && ok 0 0 "subject pull/99 ignored, positional 42 used" || ok 1 0 "subj: $(cat "$GHLOG")"
+# a real /pull/N url (no positional) is used
+: > "$GHLOG"
+feed "gh pr merge -R owner/repo https://github.com/owner/repo/pull/7" PATH="$FB:$PATH" >/dev/null 2>&1
+grep -q 'pr=7' "$GHLOG" && ok 0 0 "pull/N url parsed as PR" || ok 1 0 "url: $(cat "$GHLOG")"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

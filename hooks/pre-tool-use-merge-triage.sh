@@ -45,16 +45,17 @@ else
   [ -n "$REPO" ] || REPO=$(gh repo view --json owner,name -q '.owner.login + "/" + .name' 2>/dev/null || echo "")
   [ -n "$REPO" ] || exit 0                                      # no repo -> allow
   OWNER=${REPO%%/*}; NAME=${REPO##*/}
-  # PR number: a /pull/N url, else the first numeric token after `merge`, skipping
-  # flags AND the owner/repo value (a PR number never contains '/').
-  PR=$(printf '%s' "$CMD" | grep -oE 'pull/[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
-  if [ -z "$PR" ]; then
-    after=$(printf '%s' "$CMD" | sed -E 's/^.*[[:space:]]merge[[:space:]]+//')
-    # shellcheck disable=SC2086  # intentional word-split to tokenize the command
-    for tok in $after; do
-      case "$tok" in -*) continue ;; */*) continue ;; *[!0-9]*) break ;; *) PR="$tok"; break ;; esac
-    done
-  fi
+  # PR number, derived ONLY from the tail after `gh pr merge` (so a number or a
+  # pull/N inside a -t/-b subject elsewhere is not picked up). First the leading
+  # positional numeric token (skipping flags and the owner/repo value), then a
+  # /pull/N url in that same tail, then gh pr view.
+  after=$(printf '%s' "$CMD" | sed -E 's/^.*gh pr merge[[:space:]]*//')
+  PR=""
+  # shellcheck disable=SC2086  # intentional word-split to tokenize the command
+  for tok in $after; do
+    case "$tok" in -*) continue ;; */*) continue ;; *[!0-9]*) break ;; *) PR="$tok"; break ;; esac
+  done
+  [ -n "$PR" ] || PR=$(printf '%s' "$after" | grep -oE 'pull/[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
   [ -n "$PR" ] || PR=$(gh pr view -R "$REPO" --json number -q '.number' 2>/dev/null || echo "")
   [ -n "$PR" ] || exit 0                                        # no PR -> allow
   # Fetch ALL review threads. gh --paginate auto-follows $endCursor (GraphQL caps
