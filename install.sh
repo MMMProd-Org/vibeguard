@@ -74,9 +74,13 @@ register_hook() {
     ( if $m == "" then {hooks:[{type:"command", command:$cmd}]}
       else {matcher:$m, hooks:[{type:"command", command:$cmd}]} end ) as $entry |
     if $pos == "prepend" then
-      # Drop any existing entry carrying this command, then put it first.
-      ( .hooks[$ev] | map(select(([.hooks[]?.command] | any(. == $cmd)) | not)) ) as $without |
-      .hooks[$ev] = ([$entry] + $without)
+      # Remove only the matching hook OBJECT from each entry (preserving any
+      # co-located hooks + matcher), drop entries left empty, then prepend a
+      # fresh single-hook entry. Never clobbers unrelated hooks.
+      ( .hooks[$ev]
+        | map(.hooks |= map(select(.command != $cmd)))
+        | map(select((.hooks | length) > 0)) ) as $cleaned |
+      .hooks[$ev] = ([$entry] + $cleaned)
     else
       if ([.hooks[$ev][]?.hooks[]?.command] | any(. == $cmd)) then .
       else .hooks[$ev] += [$entry] end
