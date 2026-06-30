@@ -38,19 +38,34 @@ if [ -n "${VIBEGUARD_TRIAGE_THREADS_JSON:-}" ]; then
   LIST="$VIBEGUARD_TRIAGE_THREADS_JSON"
 else
   command -v gh >/dev/null 2>&1 || exit 0                       # gh absent -> allow
-  PR=$(printf '%s' "$CMD" | grep -oE '[0-9]+' | head -1)
+  # PR number: a /pull/N url, else the first NON-flag numeric token after `merge`
+  # (so a number in a -t/-b subject can't be mistaken for the PR). Else fall back.
+  PR=$(printf '%s' "$CMD" | grep -oE 'pull/[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+  if [ -z "$PR" ]; then
+    after=$(printf '%s' "$CMD" | sed -E 's/^.*[[:space:]]merge[[:space:]]+//')
+    # shellcheck disable=SC2086  # intentional word-split to tokenize the command
+    for tok in $after; do
+      case "$tok" in -*) continue ;; *[!0-9]*) break ;; *) PR="$tok"; break ;; esac
+    done
+  fi
   [ -n "$PR" ] || PR=$(gh pr view --json number -q '.number' 2>/dev/null || echo "")
   [ -n "$PR" ] || exit 0                                        # no PR -> allow
-  REPO=$(gh repo view --json owner,name -q '.owner.login + "/" + .name' 2>/dev/null || echo "")
+  # Repo: honor an explicit -R/--repo owner/repo, else the current repo.
+  REPO=$(printf '%s' "$CMD" | grep -oE '(-R|--repo)[=[:space:]][^[:space:]]+/[^[:space:]]+' | grep -oE '[^[:space:]=]+/[^[:space:]]+$' | head -1 || true)
+  [ -n "$REPO" ] || REPO=$(gh repo view --json owner,name -q '.owner.login + "/" + .name' 2>/dev/null || echo "")
   [ -n "$REPO" ] || exit 0                                      # no repo -> allow
   OWNER=${REPO%%/*}; NAME=${REPO##*/}
-  RAW=$(gh api graphql -f owner="$OWNER" -f repo="$NAME" -F pr="$PR" -f query='
-    query($owner:String!,$repo:String!,$pr:Int!){
+  # Fetch ALL review threads. gh --paginate auto-follows $endCursor (GraphQL caps
+  # page size at 100), so PRs with >100 threads are not silently truncated.
+  RAW=$(gh api graphql --paginate -f owner="$OWNER" -f repo="$NAME" -F pr="$PR" -f query='
+    query($owner:String!,$repo:String!,$pr:Int!,$endCursor:String){
       repository(owner:$owner,name:$repo){
         pullRequest(number:$pr){
-          reviewThreads(first:100){ nodes{ isResolved comments(first:1){ nodes{ author{ login } } } } }
+          reviewThreads(first:100, after:$endCursor){
+            pageInfo{ hasNextPage endCursor }
+            nodes{ isResolved comments(first:1){ nodes{ author{ login } } } } }
         } } }' 2>/dev/null) || exit 0                           # gh/API failure -> allow
-  LIST=$(printf '%s' "$RAW" | jq -c '[.data.repository.pullRequest.reviewThreads.nodes[]? | {resolved:.isResolved, author:(.comments.nodes[0].author.login // "")}]' 2>/dev/null || echo "[]")
+  LIST=$(printf '%s' "$RAW" | jq -cs '[.[].data.repository.pullRequest.reviewThreads.nodes[]? | {resolved:.isResolved, author:(.comments.nodes[0].author.login // "")}]' 2>/dev/null || echo "[]")
 fi
 
 UNRESOLVED=$(printf '%s' "$LIST" | jq -r --arg re "$BOT_PATTERN" '[.[] | select(.resolved==false) | select((.author//"")|test($re;"i"))] | length' 2>/dev/null || echo 0)

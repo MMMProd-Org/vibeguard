@@ -25,5 +25,20 @@ feed "$MERGE" VIBEGUARD_SKIP_TRIAGE=1 VIBEGUARD_TRIAGE_THREADS_JSON="$UNRES_BOT"
 feed "$MERGE" VIBEGUARD_BOT_PATTERN="alice" VIBEGUARD_TRIAGE_THREADS_JSON="$UNRES_HUMAN"; ok $? 2 "custom pattern matches 'alice' -> BLOCK"
 feed "$MERGE" VIBEGUARD_BOT_PATTERN="coderabbit" VIBEGUARD_TRIAGE_THREADS_JSON="$UNRES_HUMAN"; ok $? 0 "custom pattern excludes human -> allow"
 
+# gh path (no network): a fake gh that always fails -> fail-open everywhere.
+FAKEBIN=$(mktemp -d); printf '#!/bin/sh\nexit 1\n' > "$FAKEBIN/gh"; chmod +x "$FAKEBIN/gh"
+feed "gh pr merge" PATH="$FAKEBIN:$PATH";        ok $? 0 "merge w/o PR number + gh failing -> fail-open (not exit 1)"
+feed "gh pr merge 9" PATH="$FAKEBIN:$PATH";      ok $? 0 "merge + gh repo/api failing -> fail-open allow"
+
+# PR parsing (QODO: wrong-pr / repo-override). Fake gh logs its args, then fails
+# (hook fail-opens after). With -R the repo comes from the command, so the gate
+# reaches the graphql call and we can assert the PR/repo it queried.
+GHLOG=$(mktemp); FB=$(mktemp -d)
+printf '#!/bin/sh\necho "$@" >> "%s"\nexit 1\n' "$GHLOG" > "$FB/gh"; chmod +x "$FB/gh"
+feed "gh pr merge 42 -R owner/repo -t 'fix 99'" PATH="$FB:$PATH" >/dev/null 2>&1
+grep -q 'pr=42' "$GHLOG"  && ok 0 0 "parses PR 42 after merge (not the 99 in -t)" || ok 1 0 "PR parse: $(cat "$GHLOG")"
+grep -q 'pr=99' "$GHLOG"  && ok 1 0 "must NOT use 99 as PR" || ok 0 0 "ignores 99 from subject"
+grep -q 'repo=repo' "$GHLOG" && ok 0 0 "honors -R owner/repo override" || ok 1 0 "repo override: $(cat "$GHLOG")"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
