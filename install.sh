@@ -2,7 +2,7 @@
 set -euo pipefail
 #
 # vibeguard install - merge-safe, idempotent, cross-agent (Claude Code + Codex).
-# Usage: ./install.sh [--with-worktree-lock] [TARGET_REPO]   (default: current dir)
+# Usage: ./install.sh [--with-worktree-lock] [--] [TARGET_REPO]   (default: current dir)
 #
 # Guarantees:
 #   - NEVER clobbers an existing .claude/settings.json (append-only jq merge + backup).

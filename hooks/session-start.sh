@@ -22,6 +22,14 @@ set -u
 [ -t 0 ] || cat >/dev/null 2>&1 || true
 
 LOCK_TTL_SECONDS="${WORKTREE_SESSION_LOCK_TTL_SECONDS:-86400}"  # 24h default; override for tests.
+# Validate as an integer: a non-numeric override would error the numeric age
+# comparison below. Fail-closed with a clear message.
+case "$LOCK_TTL_SECONDS" in
+  ''|*[!0-9]*)
+    echo "BLOCKED: WORKTREE_SESSION_LOCK_TTL_SECONDS must be a non-negative integer (got '$LOCK_TTL_SECONDS')." >&2
+    exit 2
+    ;;
+esac
 
 acquire_session_lock() {
   local worktree_root lock_dir lock_file

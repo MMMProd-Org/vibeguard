@@ -63,11 +63,11 @@ realpath_portable() {
   readlink -f "$1" 2>/dev/null && return 0
   return 1
 }
-# Fail-closed if the lock's project_dir cannot be canonicalized at all.
-if ! LOCK_CANON=$(realpath_portable "$LOCK_PROJECT_DIR"); then
-  echo "BLOCKED: cannot canonicalize lock project_dir ($LOCK_PROJECT_DIR) - no realpath/python3/readlink -f available." >&2
-  exit 2
-fi
+# realpath_portable resolves symlinks on macOS too (where readlink lacks -f). If
+# no resolver exists at all (minimal system), fall back to the raw lock path
+# rather than bricking the lock - same behavior as the scope guard. pwd -P is
+# already physically canonical.
+LOCK_CANON=$(realpath_portable "$LOCK_PROJECT_DIR" || echo "$LOCK_PROJECT_DIR")
 PWD_CANON=$(pwd -P 2>/dev/null || pwd)
 
 # Normalize trailing slash.

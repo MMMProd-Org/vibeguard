@@ -63,5 +63,9 @@ NG="$(cd "$(mktemp -d)" && pwd -P)"
 ( cd "$NG" && printf '{}' | env -u CLAUDE_PROJECT_DIR bash "$HOOK" >/dev/null 2>&1 ); ok $? 0 "outside git + no project dir -> no-op (ALLOW)"
 [ -f "$NG/.claude/.session-lock.json" ] && ok 1 0 "no lock outside git" || ok 0 0 "no lock outside git"
 
+# 9. non-integer TTL override -> fail-closed BLOCK
+RT=$(mkrepo)
+( cd "$RT" && printf '{}' | env CLAUDE_PROJECT_DIR="$RT" WORKTREE_SESSION_LOCK_TTL_SECONDS=abc bash "$HOOK" >/dev/null 2>&1 ); ok $? 2 "non-integer TTL -> BLOCK (fail-closed)"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
