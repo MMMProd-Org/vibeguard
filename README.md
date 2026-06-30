@@ -38,6 +38,20 @@ You just need `jq` and `git` installed first. On a Mac: `brew install jq`. On Li
 
 When something is blocked, vibeguard prints a short, plain reason — so you and the AI both know what happened and why.
 
+## What's inside
+
+vibeguard installs three small guards. Each one checks an action **before** it runs, and blocks it if it looks dangerous:
+
+- **Destructive-git guard** — `hooks/block-force-push.sh`. Stops the AI from throwing away your work: force-pushing over your history, wiping changes with a hard reset, pushing straight to your main branch, or force-deleting a folder.
+- **Risky-command guard** — `hooks/pre-tool-use-danger.sh`. Stops common footguns in shell commands: blindly staging every file, skipping your git safety checks, force-cleaning the working tree, or making files world-writable.
+- **Stay-in-your-project guard** — `hooks/pre-tool-use-scope.sh`. Stops the AI from writing files **outside** your project folder. Optionally, with a `.session-scope.json` file, you can narrow it to specific folders (see the next section).
+
+And the supporting pieces:
+
+- `install.sh` — wires the guards into Claude Code and Codex for you. It backs up anything it changes and is safe to re-run.
+- `scripts/do-release.sh` — a small helper for maintainers to publish a GitHub release.
+- `advanced/` — notes on optional, heavier features (automatic pull-request review, isolated workspaces) that are **not** installed by default.
+
 ## Want tighter control? (optional)
 
 Out of the box, vibeguard only stops the AI from touching things **outside** your project. If you also want to limit it to certain folders, create a file named `.session-scope.json` in your project:
