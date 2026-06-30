@@ -111,6 +111,21 @@ single-command check cannot see. It looks at the **local** setting only, so a
 legitimate global hooks setup (e.g. git-templates) is left alone. Off by
 default, and (like the other opt-ins) wired for **Claude Code** only.
 
+## Want pull requests to start as drafts? (optional)
+
+If you open PRs with the `gh` CLI and want a review-first flow, install the
+**draft-mode gate**. It makes `gh pr create` require `--draft` (so a PR enters
+GitHub as a Draft and review bots / humans can look before CI runs), and makes
+`gh pr ready` require an explicit `PR_READY_ACK=1` acknowledgement:
+
+```bash
+/path/to/vibeguard/install.sh --with-draft-mode
+```
+
+It is opinionated and assumes a GitHub PR workflow, so it is **off by default**.
+It only inspects `gh` in command position (a literal `rg "gh pr create"` is fine)
+and, like the other opt-ins, is wired for **Claude Code** only.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -134,7 +149,8 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | PR merge-triage — block a merge until reviewer-bot threads are resolved | shipped (opt-in) |
 | Generic bot-review support (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor, custom) | shipped (opt-in) |
 | hooksPath push guard — block a push when the local `core.hooksPath` bypasses your hooks | shipped (opt-in) |
-| Draft-mode + review-receipt gates | v2, opt-in |
+| Draft-mode gate — `gh pr create` must be `--draft`; `gh pr ready` needs an explicit ack | shipped (opt-in) |
+| Review-receipt gate — require a local code-review receipt before push | v2, opt-in |
 | Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
 
 The v2 guardrails are **not** installed by default: they assume a GitHub PR workflow
