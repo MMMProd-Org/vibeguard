@@ -59,19 +59,26 @@ if [ "$WITH_LOCK" = "1" ]; then
 fi
 CLAUDE_HOOKS+=( "${HOOKS[@]}" )
 
-# register_hook <json-file> <command> <event> <matcher>
-# Append-only + idempotent: rewrites the file only when the merge changes it.
+# register_hook <json-file> <command> <event> <matcher> [append|prepend]
+# Idempotent: rewrites the file only when the merge changes it.
+#   - append  : add once if the command is absent (leave position as-is).
+#   - prepend : ensure the command is FIRST in the event list, self-healing an
+#     existing-but-misordered entry (the pwd-guard ordering invariant). Re-running
+#     is a no-op once it is already first.
 # An empty matcher (SessionStart) produces an entry with no matcher key.
 register_hook() {
   local file="$1" cmd="$2" ev="$3" m="$4" pos="${5:-append}" tmp
   tmp="$(mktemp)"
   if ! jq --arg cmd "$cmd" --arg ev "$ev" --arg m "$m" --arg pos "$pos" '
     .hooks //= {} | .hooks[$ev] //= [] |
-    if ([.hooks[$ev][]?.hooks[]?.command] | any(. == $cmd)) then .
+    ( if $m == "" then {hooks:[{type:"command", command:$cmd}]}
+      else {matcher:$m, hooks:[{type:"command", command:$cmd}]} end ) as $entry |
+    if $pos == "prepend" then
+      # Drop any existing entry carrying this command, then put it first.
+      ( .hooks[$ev] | map(select(([.hooks[]?.command] | any(. == $cmd)) | not)) ) as $without |
+      .hooks[$ev] = ([$entry] + $without)
     else
-      ( if $m == "" then {hooks:[{type:"command", command:$cmd}]}
-        else {matcher:$m, hooks:[{type:"command", command:$cmd}]} end ) as $entry |
-      if $pos == "prepend" then .hooks[$ev] = ([$entry] + .hooks[$ev])
+      if ([.hooks[$ev][]?.hooks[]?.command] | any(. == $cmd)) then .
       else .hooks[$ev] += [$entry] end
     end
   ' "$file" > "$tmp"; then
