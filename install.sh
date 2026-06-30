@@ -53,15 +53,17 @@ CLAUDE_HOOKS+=( "${HOOKS[@]}" )
 # Append-only + idempotent: rewrites the file only when the merge changes it.
 # An empty matcher (SessionStart) produces an entry with no matcher key.
 register_hook() {
-  local file="$1" cmd="$2" ev="$3" m="$4" tmp
+  local file="$1" cmd="$2" ev="$3" m="$4" pos="${5:-append}" tmp
   tmp="$(mktemp)"
-  if ! jq --arg cmd "$cmd" --arg ev "$ev" --arg m "$m" '
+  if ! jq --arg cmd "$cmd" --arg ev "$ev" --arg m "$m" --arg pos "$pos" '
     .hooks //= {} | .hooks[$ev] //= [] |
     if ([.hooks[$ev][]?.hooks[]?.command] | any(. == $cmd)) then .
-    else .hooks[$ev] += [
-      if $m == "" then {hooks:[{type:"command", command:$cmd}]}
-      else {matcher:$m, hooks:[{type:"command", command:$cmd}]} end
-    ] end
+    else
+      ( if $m == "" then {hooks:[{type:"command", command:$cmd}]}
+        else {matcher:$m, hooks:[{type:"command", command:$cmd}]} end ) as $entry |
+      if $pos == "prepend" then .hooks[$ev] = ([$entry] + .hooks[$ev])
+      else .hooks[$ev] += [$entry] end
+    end
   ' "$file" > "$tmp"; then
     rm -f "$tmp"
     echo "vibeguard: $file is not valid JSON - fix or remove it, then re-run." >&2
@@ -94,7 +96,8 @@ SETTINGS="$TARGET/.claude/settings.json"
 SNAP="$(mktemp)"; cp "$SETTINGS" "$SNAP"
 for spec in "${CLAUDE_HOOKS[@]}"; do
   f="${spec%%:*}"; rest="${spec#*:}"; event="${rest%%:*}"; matcher="${rest##*:}"
-  register_hook "$SETTINGS" 'bash "${CLAUDE_PROJECT_DIR:?CLAUDE_PROJECT_DIR unset}/.claude/hooks/'"$f"'"' "$event" "$matcher"
+  pos="append"; [ "$f" = "pre-tool-use-pwd-guard.sh" ] && pos="prepend"
+  register_hook "$SETTINGS" 'bash "${CLAUDE_PROJECT_DIR:?CLAUDE_PROJECT_DIR unset}/.claude/hooks/'"$f"'"' "$event" "$matcher" "$pos"
 done
 cmp -s "$SNAP" "$SETTINGS" || cp "$SNAP" "$SETTINGS.vibeguard-bak.$(date +%s 2>/dev/null || echo bak).$$"
 rm -f "$SNAP"

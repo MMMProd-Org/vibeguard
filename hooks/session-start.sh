@@ -29,14 +29,22 @@ acquire_session_lock() {
   local existing_pid existing_host existing_started_at existing_project_dir existing_lock_id
   local age_seconds elapsed stale
 
-  # Resolve the current worktree root. Outside git -> skip lock (no-op).
-  worktree_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+  # Resolve the current worktree root. Use CLAUDE_PROJECT_DIR first so the lock
+  # is written where pre-tool-use-pwd-guard.sh looks for it, then fall back to the
+  # git toplevel. Outside any repo and with no project dir -> skip lock (no-op).
+  worktree_root="${CLAUDE_PROJECT_DIR:-}"
+  if [ -z "$worktree_root" ]; then
+    worktree_root=$(git rev-parse --show-toplevel 2>/dev/null) || return 0
+  fi
   [ -z "$worktree_root" ] && return 0
 
   lock_dir="$worktree_root/.claude"
   lock_file="$lock_dir/.session-lock.json"
 
-  lock_pid="$$"
+  # Use PPID (the parent that launched the hook = the long-lived agent session
+  # process), not $$ (this short-lived hook shell, which exits immediately and
+  # would make every later `kill -0` read the lock as stale -> never blocks).
+  lock_pid="$PPID"
   lock_host=$(hostname 2>/dev/null || echo "unknown")
   started_at_iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   started_at_epoch=$(date +%s)

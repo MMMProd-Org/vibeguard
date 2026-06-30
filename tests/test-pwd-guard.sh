@@ -30,5 +30,12 @@ run "$PC" "$PC";                     ok $? 2 "empty project_dir in lock -> BLOCK
 NG="$(cd "$(mktemp -d)" && pwd -P)"
 ( cd "$NG" && printf '{}' | env -u CLAUDE_PROJECT_DIR bash "$HOOK" >/dev/null 2>&1 ); ok $? 0 "outside git + no project dir -> ALLOW"
 
+# canonicalization parity (QODO: non-portable readlink -f): lock project_dir is a
+# symlink to the real worktree; cwd at the real dir must still match.
+RReal="$(cd "$(mktemp -d)" && pwd -P)"
+SLBASE="$(cd "$(mktemp -d)" && pwd -P)"; ln -s "$RReal" "$SLBASE/link"
+mklock "$RReal" "$SLBASE/link"
+run "$RReal" "$RReal";               ok $? 0 "lock project_dir via symlink, cwd real -> ALLOW (canonicalized)"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

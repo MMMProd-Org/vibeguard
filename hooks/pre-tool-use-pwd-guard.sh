@@ -51,9 +51,22 @@ if [ -z "$LOCK_PROJECT_DIR" ]; then
   exit 2
 fi
 
-# Canonicalize both. readlink -f resolves symlinks + relative paths (GNU/Linux).
-# Fallback to the original string if readlink fails (BSD without coreutils).
-LOCK_CANON=$(readlink -f "$LOCK_PROJECT_DIR" 2>/dev/null || echo "$LOCK_PROJECT_DIR")
+# Canonicalize both paths the same way. Older macOS readlink lacks -f, where a
+# bare `readlink -f || echo` leaves the lock path unresolved while `pwd -P`
+# resolves it, producing a false match/mismatch. realpath_portable tries
+# realpath / python3 / greadlink / readlink -f (same helper as the scope guard).
+realpath_portable() {
+  if command -v realpath  >/dev/null 2>&1; then realpath  "$1" 2>/dev/null && return 0; fi
+  if command -v python3   >/dev/null 2>&1; then python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$1" 2>/dev/null && return 0; fi
+  if command -v greadlink >/dev/null 2>&1; then greadlink -f "$1" 2>/dev/null && return 0; fi
+  readlink -f "$1" 2>/dev/null && return 0
+  return 1
+}
+# Fail-closed if the lock's project_dir cannot be canonicalized at all.
+if ! LOCK_CANON=$(realpath_portable "$LOCK_PROJECT_DIR"); then
+  echo "BLOCKED: cannot canonicalize lock project_dir ($LOCK_PROJECT_DIR) - no realpath/python3/readlink -f available." >&2
+  exit 2
+fi
 PWD_CANON=$(pwd -P 2>/dev/null || pwd)
 
 # Normalize trailing slash.
