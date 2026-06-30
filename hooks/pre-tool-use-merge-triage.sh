@@ -38,23 +38,25 @@ if [ -n "${VIBEGUARD_TRIAGE_THREADS_JSON:-}" ]; then
   LIST="$VIBEGUARD_TRIAGE_THREADS_JSON"
 else
   command -v gh >/dev/null 2>&1 || exit 0                       # gh absent -> allow
-  # PR number: a /pull/N url, else the first NON-flag numeric token after `merge`
-  # (so a number in a -t/-b subject can't be mistaken for the PR). Else fall back.
+  # Repo FIRST: honor -R/--repo owner/repo (incl. the glued -Rowner/repo form),
+  # else the current repo. Parsing it first lets the PR scan skip the repo value
+  # and the PR fallback query the right repo.
+  REPO=$(printf '%s' "$CMD" | grep -oE '(-R|--repo)[=[:space:]]?[^[:space:]]+/[^[:space:]]+' | head -1 | sed -E 's/^(-R|--repo)[=[:space:]]?//' || true)
+  [ -n "$REPO" ] || REPO=$(gh repo view --json owner,name -q '.owner.login + "/" + .name' 2>/dev/null || echo "")
+  [ -n "$REPO" ] || exit 0                                      # no repo -> allow
+  OWNER=${REPO%%/*}; NAME=${REPO##*/}
+  # PR number: a /pull/N url, else the first numeric token after `merge`, skipping
+  # flags AND the owner/repo value (a PR number never contains '/').
   PR=$(printf '%s' "$CMD" | grep -oE 'pull/[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
   if [ -z "$PR" ]; then
     after=$(printf '%s' "$CMD" | sed -E 's/^.*[[:space:]]merge[[:space:]]+//')
     # shellcheck disable=SC2086  # intentional word-split to tokenize the command
     for tok in $after; do
-      case "$tok" in -*) continue ;; *[!0-9]*) break ;; *) PR="$tok"; break ;; esac
+      case "$tok" in -*) continue ;; */*) continue ;; *[!0-9]*) break ;; *) PR="$tok"; break ;; esac
     done
   fi
-  [ -n "$PR" ] || PR=$(gh pr view --json number -q '.number' 2>/dev/null || echo "")
+  [ -n "$PR" ] || PR=$(gh pr view -R "$REPO" --json number -q '.number' 2>/dev/null || echo "")
   [ -n "$PR" ] || exit 0                                        # no PR -> allow
-  # Repo: honor an explicit -R/--repo owner/repo, else the current repo.
-  REPO=$(printf '%s' "$CMD" | grep -oE '(-R|--repo)[=[:space:]][^[:space:]]+/[^[:space:]]+' | grep -oE '[^[:space:]=]+/[^[:space:]]+$' | head -1 || true)
-  [ -n "$REPO" ] || REPO=$(gh repo view --json owner,name -q '.owner.login + "/" + .name' 2>/dev/null || echo "")
-  [ -n "$REPO" ] || exit 0                                      # no repo -> allow
-  OWNER=${REPO%%/*}; NAME=${REPO##*/}
   # Fetch ALL review threads. gh --paginate auto-follows $endCursor (GraphQL caps
   # page size at 100), so PRs with >100 threads are not silently truncated.
   RAW=$(gh api graphql --paginate -f owner="$OWNER" -f repo="$NAME" -F pr="$PR" -f query='

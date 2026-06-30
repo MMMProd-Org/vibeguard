@@ -40,5 +40,10 @@ grep -q 'pr=42' "$GHLOG"  && ok 0 0 "parses PR 42 after merge (not the 99 in -t)
 grep -q 'pr=99' "$GHLOG"  && ok 1 0 "must NOT use 99 as PR" || ok 0 0 "ignores 99 from subject"
 grep -q 'repo=repo' "$GHLOG" && ok 0 0 "honors -R owner/repo override" || ok 1 0 "repo override: $(cat "$GHLOG")"
 
+# flags reordered: -R owner/repo BEFORE the PR number must still parse PR 42
+: > "$GHLOG"
+feed "gh pr merge -R owner/repo 42" PATH="$FB:$PATH" >/dev/null 2>&1
+grep -q 'pr=42' "$GHLOG" && ok 0 0 "PR after -R owner/repo still parsed (not stopped on '/')" || ok 1 0 "reordered: $(cat "$GHLOG")"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
