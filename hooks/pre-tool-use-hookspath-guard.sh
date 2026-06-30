@@ -32,11 +32,49 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) |
 # seen as one command), then iterate the segments split on shell separators.
 JOINED=${CMD//$'\\'$'\n'/ }
 
+# git_subcommand <segment> : echo the git subcommand (first non-option token
+# after `git`, skipping global options and the values of value-taking ones), or
+# nothing if the segment is not a git command. Lets us treat ONLY a real
+# `git [globals] push` as a push -- not `git help push` or `rg "git push"`.
+git_subcommand() {
+  local after tok skip=0 inq=""
+  after=$(sed -nE 's/.*(^|[^[:alnum:]_-])git[[:space:]]+(.*)$/\2/p' <<<"$1" | head -1 || true)
+  [ -n "$after" ] || return 0
+  # shellcheck disable=SC2086  # intentional word-split to tokenize the segment
+  for tok in $after; do
+    # consume the remaining tokens of a quoted value that spans whitespace.
+    if [ -n "$inq" ]; then case "$tok" in *"$inq") inq="" ;; esac; continue; fi
+    if [ "$skip" = 1 ]; then
+      skip=0
+      # an option value that OPENS a quote without closing it spans more tokens.
+      case "$tok" in
+        \"*\"|\'*\') : ;;
+        \"*) inq='"' ;;
+        \'*) inq="'" ;;
+      esac
+      continue
+    fi
+    case "$tok" in
+      -C|-c|--git-dir|--work-tree|--namespace|--super-prefix|--config-env) skip=1; continue ;;
+      --*=*) continue ;;
+      -*) continue ;;
+      *) printf '%s' "$tok"; return 0 ;;
+    esac
+  done
+  # ran out mid-quote -> subcommand position unresolved; signal ambiguity.
+  [ -n "$inq" ] && printf '?'
+  return 0
+}
+
 # check_segment <segment> : exit 2 to BLOCK; return 0 to allow this segment.
 check_segment() {
   local SEG="$1" CVAL TARGET_REPO HAS_C HOOKS_PATH
-  # only a git push (no separators inside a segment, so [^[:space:]] is safe).
-  grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^[:space:]]+[[:space:]]+)*push([[:space:]]|$)' <<<"$SEG" || return 0
+  # only when `push` is the actual git subcommand (not `git help push`,
+  # `rg "git push"`, etc.) -- avoids over-blocking unrelated commands.
+  case "$(git_subcommand "$SEG")" in
+    push|"?") : ;;   # real push, or an unparseable quoted value -> verify/fail-closed
+    *) return 0 ;;   # another subcommand (git help push) or not git -> not a push
+  esac
 
   # --git-dir/--work-tree targeting is not resolved here. Rather than check the
   # wrong repo, fail-closed: the push names a repo whose hooks we cannot verify.

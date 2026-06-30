@@ -68,6 +68,13 @@ feed "git -C \$HOME/myrepo push" HOME="$HOMEDIR"; ok $? 0 "-C \$HOME/repo expand
 # No explicit target + non-repo CWD -> graceful no-op (nothing to protect).
 feed_cwd "$NG" "git push";                       ok $? 0 "plain push from non-repo cwd -> allow (no-op)"
 
+# `push` must be the git SUBCOMMAND -- not over-block these (even from a repo
+# whose hooksPath is redirected, they are not a push).
+git -C "$R" config core.hooksPath "/tmp/evil-no-hooks"
+feed_cwd "$R" "git help push";                   ok $? 0 "git help push (push is an arg) -> allow"
+feed_cwd "$R" 'rg \"git push\" .';               ok $? 0 "rg \"git push\" (literal search) -> allow"
+feed_cwd "$R" "git push";                        ok $? 2 "real git push from redirected cwd -> BLOCK"
+
 # Multi-command: a -C in one segment must NOT be paired with a push in another.
 # cwd = an UNSAFE repo; `git -C <safe> status; git push` must check the cwd, BLOCK.
 SAFE=$(mkrepo); UNSAFE=$(mkrepo)
