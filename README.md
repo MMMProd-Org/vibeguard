@@ -78,7 +78,7 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 
 | Guardrail | Status |
 | --- | --- |
-| Destructive-git guard (force-push, hard-reset, push-to-default-branch, recursive force-delete) | shipped |
+| Destructive-git guard (force-push, hard-reset, recursive force-delete, and pushes that name a protected branch) | shipped |
 | Risky-command guard (stage-all, skip-git-checks, force-clean, world-writable) | shipped |
 | Stay-in-your-project scope guard (+ optional `.session-scope.json`) | shipped |
 | Worktree session-lock — one agent per worktree (multi-agent collision guard) | v2, opt-in |

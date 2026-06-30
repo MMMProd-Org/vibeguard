@@ -2,7 +2,7 @@
 
 These guardrails are **intentionally not shipped** in the beginner install. They
 target users who already run a GitHub pull-request workflow with a merge queue
-and bot reviewers (CodeRabbit, Qodo, Copilot, Sourcery, Vercel) — not the
+and bot reviewers (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor) — not the
 zero-config vibe-coder audience the core is built for.
 
 They are tracked here so the roadmap and the de-coupling work are explicit.
