@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 #
 # vibeguard pre-tool-use-pwd-guard.sh - PreToolUse:Bash worktree-lock guard.
 #
@@ -73,6 +73,17 @@ PWD_CANON=$(pwd -P 2>/dev/null || pwd)
 # Normalize trailing slash.
 LOCK_CANON="${LOCK_CANON%/}"
 PWD_CANON="${PWD_CANON%/}"
+
+# Tamper check: the lock's project_dir must match the worktree the lock lives in.
+# A parseable-but-tampered lock (e.g. project_dir "/") would otherwise make the
+# prefix check below pass for any cwd, silently bypassing the drift guard.
+PROJECT_CANON=$(realpath_portable "$PROJECT_DIR" || echo "$PROJECT_DIR")
+PROJECT_CANON="${PROJECT_CANON%/}"
+if [ "$LOCK_CANON" != "$PROJECT_CANON" ]; then
+  echo "BLOCKED: lock project_dir ($LOCK_CANON) does not match this worktree ($PROJECT_CANON) - tampered/stale lock." >&2
+  echo "Inspect it, then delete it: rm $LOCK_FILE" >&2
+  exit 2
+fi
 
 # PASS if pwd == project_dir OR pwd is a subdirectory of project_dir.
 case "$PWD_CANON" in

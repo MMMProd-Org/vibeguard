@@ -26,6 +26,10 @@ run "$PC" "$PC";                     ok $? 2 "corrupted JSON lock -> BLOCK (fail
 mklock "$PC" ""
 run "$PC" "$PC";                     ok $? 2 "empty project_dir in lock -> BLOCK (fail-closed)"
 
+# tampered lock: project_dir does not match the worktree (e.g. "/") -> BLOCK
+PT="$(cd "$(mktemp -d)" && pwd -P)"; mklock "$PT" "/"
+run "$PT" "$PT";                     ok $? 2 "lock project_dir mismatch (tampered) -> BLOCK"
+
 # outside any git tree + no CLAUDE_PROJECT_DIR -> no-op ALLOW
 NG="$(cd "$(mktemp -d)" && pwd -P)"
 ( cd "$NG" && printf '{}' | env -u CLAUDE_PROJECT_DIR bash "$HOOK" >/dev/null 2>&1 ); ok $? 0 "outside git + no project dir -> ALLOW"

@@ -16,7 +16,7 @@
 #   - corrupted JSON (missing critical fields or jq parse fail) -> fail-closed BLOCK.
 #   - claude_session_id is diagnostic only, never part of the lock identity.
 
-set -u
+set -euo pipefail
 
 # Drain the SessionStart stdin payload (event JSON we ignore).
 [ -t 0 ] || cat >/dev/null 2>&1 || true
