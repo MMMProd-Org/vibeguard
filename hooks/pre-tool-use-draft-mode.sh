@@ -16,6 +16,14 @@ set -euo pipefail
 #
 # NOTE: vibeguard's own Claude flow creates PRs via the GitHub MCP tools, which
 # this Bash hook never sees; this gate targets the `gh` CLI path (Codex / humans).
+#
+# SCOPE (seatbelt, not vault): segment splitting and comment stripping use
+# basic quote tracking, not a full shell tokenizer. Adversarial quoting -- a
+# separator inside quotes (`echo "x; gh pr create"`) or an escaped quote
+# (`-t "Fix \"#9\""`) -- can mis-split a segment. Every such miss degrades
+# toward an OVER-block (a harmless command refused), never toward letting a
+# real `gh pr create` slip through without --draft. A shlex-grade tokenizer is
+# deliberately out of scope (shell-quoting edge cases are bottomless).
 
 command -v jq >/dev/null 2>&1 || { echo "BLOCKED : jq missing." >&2; exit 2; }
 INPUT=$(cat)
