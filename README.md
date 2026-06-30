@@ -62,6 +62,20 @@ Out of the box, the scope guard blocks writes **outside** your project (the git 
 
 Now the AI can only write inside `src/` and `tests/`. Everything else is blocked.
 
+## Running several AI agents at once? (optional)
+
+If you run more than one agent across separate git worktrees, install the
+**worktree session-lock** so each agent stays pinned to its own worktree and
+cannot wander into another one's:
+
+```bash
+/path/to/vibeguard/install.sh --with-worktree-lock
+```
+
+It records a small lock file when a session starts, and blocks shell commands
+whose working directory has drifted outside the locked worktree. It is off by
+default because a single agent in a single repo does not need it.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -81,7 +95,7 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | Destructive-git guard (force-push, hard-reset, recursive force-delete, and pushes that name a protected branch) | shipped |
 | Risky-command guard (stage-all, skip-git-checks, force-clean, world-writable) | shipped |
 | Stay-in-your-project scope guard (+ optional `.session-scope.json`) | shipped |
-| Worktree session-lock — one agent per worktree (multi-agent collision guard) | v2, opt-in |
+| Worktree session-lock — one agent per worktree (multi-agent collision guard) | shipped (opt-in) |
 | PR merge-triage — block a merge until reviewer-bot threads are triaged | v2, opt-in |
 | Generic bot-review support (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor) | v2, opt-in |
 | Draft-mode + review-receipt gates | v2, opt-in |

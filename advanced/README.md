@@ -7,6 +7,10 @@ zero-config vibe-coder audience the core is built for.
 
 They are tracked here so the roadmap and the de-coupling work are explicit.
 
+> **Update:** the worktree session-lock has since shipped as an opt-in install
+> (`install.sh --with-worktree-lock`) — see the main README. The components
+> below remain deferred.
+
 ## Deferred components
 
 | Component | What it does | Why it is advanced |
@@ -15,7 +19,6 @@ They are tracked here so the roadmap and the de-coupling work are explicit.
 | bot-thread fetch (lib) | Single source of truth for the reviewer-bot login pattern + thread hashing | Only useful as the shared library for the triage chain |
 | merge-state engine | Read-only merge-state dump + next-action recommendation + JSON policy | ~1000 lines; the engine behind a project-specific merge workflow |
 | draft-mode + review-receipt gates | Forces PRs to enter as Draft and requires a local review receipt before push | Opinionated team workflow; would block a beginner's normal push |
-| worktree session-lock | Pins each agent session to its own worktree (multi-agent collision guard) | Pointless for a single agent in a single repo |
 | agent backlog | Files de-duplicated GitHub issues for out-of-scope findings | Needs a GitHub issues workflow + label conventions |
 | merge-queue CI | A `merge_group` CI check that re-runs the guards on the merge queue (secret scan over the queued range, repo-hygiene file gates) | Only meaningful with a GitHub merge queue; the core ships a simpler `ci.yml` instead |
 
