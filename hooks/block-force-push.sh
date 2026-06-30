@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # PreToolUse:Bash hook. Reads Claude Code tool-input JSON from stdin, extracts
 # the bash command via jq, exits 2 (blocking error) if the command matches any
-# destructive pattern listed by the /issue-go protocol :
+# destructive pattern (enumerated below) :
 #
 #   - git push --force / -f / --force-with-lease (any form)
 #   - git reset --hard
