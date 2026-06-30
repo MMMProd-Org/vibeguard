@@ -1,0 +1,30 @@
+name: release
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: publish release (idempotent)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          # Defense in depth: the tag glob is coarse; only publish for a strict
+          # vX.Y.Z tag (a hand-pushed v1.2.3-rc1 / v1.2.3.4 must not publish).
+          if ! printf "%s" "$tag" | grep -qE '^v[0-9]+[.][0-9]+[.][0-9]+$'; then
+            echo "tag $tag is not a strict vX.Y.Z release tag -> not publishing"
+            exit 0
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists -> nothing to do"
+            exit 0
+          fi
+          gh release create "$tag" --verify-tag --title "$tag" --generate-notes

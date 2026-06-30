@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/do-release.sh — publish a GitHub release for an ALREADY-merged PR.
+# scripts/do-release.sh — tag an ALREADY-merged commit and push the tag.
 #
 # Usage:
 #   bash scripts/do-release.sh <version> [<commit-sha>]
@@ -7,7 +7,8 @@
 #     <commit-sha>  optional; default = HEAD of origin/main after fetch.
 #
 # Safe by design: refuses to overwrite an existing tag or release.
-# Never touches the base branch and never merges; it only tags, pushes the tag, and runs gh release create.
+# Never touches the base branch and never merges; it only tags and pushes the tag.
+# The release workflow (.github/workflows/release.yml) publishes the GitHub release on tag push.
 set -euo pipefail
 
 die(){ echo "ERROR: $*" >&2; exit 1; }
@@ -63,8 +64,6 @@ git tag -a "$VERSION" -m "Release $VERSION" "$SHA"
 echo "==> push tag"
 git push origin "$VERSION"
 
-echo "==> gh release create $VERSION (auto-generated notes)"
-gh release create "$VERSION" --verify-tag --title "$VERSION" --generate-notes
-
 echo ""
-echo "OK: release $VERSION published -> https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/$VERSION"
+echo "OK: tag $VERSION pushed. The release workflow will publish the GitHub release."
+echo "    -> https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/$VERSION"
