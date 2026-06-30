@@ -26,31 +26,42 @@ INPUT=$(cat)
 CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || { echo "BLOCKED : invalid input JSON." >&2; exit 2; }
 [ -z "$CMD" ] && exit 0
 
-# Act only on a git push. Covers `git push`, `git -C <path> push`,
-# `git -c k=v push`, `git --git-dir=... push`.
-# Known limitation: a literal "git push" inside a string argument (rg "git push",
-# sed 's/git push//') may match -- real shell tokenisation is not feasible in
-# bash. A conservative footgun trade-off (same as the upstream guard).
+# Act only on a git push. Detection matches `git push`, `git -C <path> push`,
+# `git -c k=v push`. Repo targeting is RESOLVED only for `git -C <path>`; the
+# --git-dir/--work-tree forms are detected and fail-closed below (refuse, never
+# check the wrong repo). Known limitation: a literal "git push" inside a string
+# argument (rg "git push") may match -- bash cannot truly tokenise a command.
 printf '%s\n' "$CMD" | grep -qE '(^|[^[:alnum:]_-])git[[:space:]]+([^[:space:]]+[[:space:]]+)*push([[:space:]]|$|;|&|\|)' || exit 0
 
-# Resolve the target repo: honour `git -C <path>`, else the current directory.
-TARGET_REPO=$(printf '%s\n' "$CMD" | sed -nE 's/.*git[[:space:]]+(.*[[:space:]]+)?-C[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
-# Strip ONE layer of surrounding matching quotes the shell would remove, so
-# `git -C '/repo' push` resolves to /repo (else a quoted -C path silently
-# became "non-repo" and skipped the check).
-TARGET_REPO="${TARGET_REPO#\'}"; TARGET_REPO="${TARGET_REPO%\'}"
-TARGET_REPO="${TARGET_REPO#\"}"; TARGET_REPO="${TARGET_REPO%\"}"
-[ -z "$TARGET_REPO" ] && TARGET_REPO="."
+# Repo targeting via --git-dir/--work-tree is not resolved here. Rather than
+# check the current directory (the wrong repo) and hand out a free pass,
+# fail-closed: the push names a repo whose hooks config we cannot verify.
+if printf '%s\n' "$CMD" | grep -qE '(^|[[:space:]])--(git-dir|work-tree)([[:space:]]|=)'; then
+  echo "BLOCKED : git push via --git-dir/--work-tree; vibeguard cannot resolve that target to verify core.hooksPath." >&2
+  echo "Run the push from inside the repo (plain 'git push') so its hooks config can be checked." >&2
+  exit 2
+fi
 
-# Not a git repo -> the push is not ours to judge, allow (graceful no-op).
-# Residual (documented, seatbelt-not-vault): a -C path containing SPACES is
-# truncated by the word-based parse above and reads as non-repo here -> allowed.
-# Closing it needs real shell tokenisation; an agent deliberately quoting a
-# spaced path to evade is out of scope (the danger guard's same trade-off).
-# Same status for repo targeting via --git-dir/--work-tree (uncommon for the
-# vibe-coder audience): only `git -C <path>` is parsed; other forms fall back
-# to the current directory. Footgun prevention, not an adversarial sandbox.
-git -C "$TARGET_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
+# Resolve the target repo: honour `git -C <path>`, stripping ONE layer of the
+# surrounding matching quotes the shell would remove (so `git -C '/repo' push`
+# resolves to /repo). Else the current directory.
+CVAL=$(printf '%s\n' "$CMD" | sed -nE 's/.*git[[:space:]]+(.*[[:space:]]+)?-C[[:space:]]+([^[:space:]]+).*/\2/p' | head -1)
+CVAL="${CVAL#\'}"; CVAL="${CVAL%\'}"
+CVAL="${CVAL#\"}"; CVAL="${CVAL%\"}"
+if [ -n "$CVAL" ]; then HAS_C=1; TARGET_REPO="$CVAL"; else HAS_C=0; TARGET_REPO="."; fi
+
+# Resolve the target as a git work tree. An explicit `-C` target that does NOT
+# resolve (e.g. a path with spaces the word-based parse truncated) is fail-closed
+# -- an explicit, unverifiable target must not get a free pass. With NO explicit
+# target (plain push) a non-repo cwd is a graceful no-op: nothing to protect.
+if ! git -C "$TARGET_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if [ "$HAS_C" = 1 ]; then
+    echo "BLOCKED : git push -C target '$TARGET_REPO' could not be resolved to a git repo." >&2
+    echo "If the path has spaces/quotes, run the push from inside the repo so its hooks config can be checked." >&2
+    exit 2
+  fi
+  exit 0
+fi
 
 # Live LOCAL core.hooksPath. A runtime `git config core.hooksPath X` writes here
 # by default; --local excludes a legit global setup so it cannot false-positive.
