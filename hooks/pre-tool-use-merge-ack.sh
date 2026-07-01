@@ -23,7 +23,7 @@ _sub=$(printf '%s' "$CMD" | awk '{
   while ($i=="sudo"||$i=="env"||$i=="command"||$i=="nohup"||$i=="nice") i++
   if ($i!="gh" && $i !~ /\/gh$/) { print ""; exit }
   i++
-  while ($i ~ /^-/) i++
+  while ($i ~ /^-/) { if (($i=="-R" || $i=="--repo") && $(i+1) !~ /^-/) i+=2; else i++ }
   print $i" "$(i+1)
 }')
 case "$_sub" in "pr merge") : ;; *) exit 0 ;; esac
@@ -44,10 +44,11 @@ for tok in $after; do
   esac
 done
 [ -n "$PR" ] || PR=$(printf '%s' "$after" | grep -oE 'pull/[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
-if [ -z "$PR" ] && [ -n "$BRANCH" ] && command -v gh >/dev/null 2>&1; then
-  PR=$(gh pr view "$BRANCH" ${REPO:+-R "$REPO"} --json number -q '.number' 2>/dev/null || echo "")
+if [ -z "$PR" ] && [ -n "$BRANCH" ]; then
+  command -v gh >/dev/null 2>&1 && PR=$(gh pr view "$BRANCH" ${REPO:+-R "$REPO"} --json number -q '.number' 2>/dev/null || echo "")
+  [ -n "$PR" ] || exit 0     # explicit branch given but unresolved -> fail OPEN, do not guess the current PR
 fi
-[ -n "$PR" ] || PR=$(gh pr view ${REPO:+-R "$REPO"} --json number -q '.number' 2>/dev/null || echo "")
+[ -z "$PR" ] && [ -z "$BRANCH" ] && command -v gh >/dev/null 2>&1 && PR=$(gh pr view ${REPO:+-R "$REPO"} --json number -q '.number' 2>/dev/null || echo "")
 [ -n "$PR" ] || exit 0
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

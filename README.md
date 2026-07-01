@@ -202,10 +202,7 @@ bot review threads on that PR:
 ```
 
 Run `check-merge-ack.sh <PR>` to write the ack -- it hashes the current thread IDs
-and saves the result locally. The next merge on that PR goes through. If the bot
-posts new feedback afterwards, the thread list changes, the hash no longer matches,
-and the gate re-blocks. One gap: if a bot edits an existing comment in place rather
-than adding a new thread, the hash does not change and the gate will not re-block.
+and saves the result locally. The next merge on that PR goes through. If the bot opens a new review thread afterwards, the thread ID set changes, the hash no longer matches, and the gate re-blocks. Replies or edits inside an existing thread do not change the thread ID set and will not re-block.
 
 It is **off by default** and wired for **Claude Code** only. Like the other opt-ins,
 it is a seatbelt -- fail-open: if `gh` is unavailable or the PR cannot be resolved,

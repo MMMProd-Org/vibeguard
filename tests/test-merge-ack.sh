@@ -81,5 +81,11 @@ ok "$([ -f "$RWRITE/.agent-backlog/triaged-prs/88.ack" ] && echo yes || echo no)
 # ---- new: D zero bot threads -> exit 0 ----
 ( cd "$(mkrepo)" && VIBEGUARD_ACK_THREADS_JSON='[{"id":3,"author":"human"}]' "$BASH_BIN" "$CHECK" 42 >/dev/null 2>&1 ); ok $? 0 "writer: zero bot threads -> exit 0 (no-op)"
 
+# ---- new: F5 explicit-PR quoted-flag, gh forced to fail -> still BLOCK ----
+STUBFAIL=$(mktemp -d); printf '#!/usr/bin/env bash\nexit 1\n' > "$STUBFAIL/gh"; chmod +x "$STUBFAIL/gh"
+RQF=$(mkrepo)
+feed_fail(){ local dir="$1" cmd="$2"; printf '%s' "$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')" | ( cd "$dir" && PATH="$STUBFAIL:$PATH" VIBEGUARD_ACK_THREADS_JSON="$THREADS" "$BASH_BIN" "$HOOK" >/dev/null 2>&1 ); }
+feed_fail "$RQF" 'gh pr merge 42 --body "all clear"';  ok $? 2 "hook: explicit PR + quoted flag, gh fails -> still BLOCK (no false fallback)"
+
 echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

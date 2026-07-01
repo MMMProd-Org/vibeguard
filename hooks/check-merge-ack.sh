@@ -11,6 +11,7 @@ set -uo pipefail
 # (sha256sum|shasum); freshness via ts_epoch (never parse ISO). Seatbelt, not a vault.
 
 ACK_TTL="${VIBEGUARD_MERGE_ACK_TTL:-3600}"
+case "$ACK_TTL" in ''|*[!0-9]*) ACK_TTL=3600 ;; esac
 BOT_PATTERN="${VIBEGUARD_BOT_PATTERN:-coderabbit|qodo|copilot|sourcery|vercel|cursor|greptile|github-code-quality}"
 
 command -v jq >/dev/null 2>&1 || { echo "merge-ack: jq required." >&2; exit 4; }
