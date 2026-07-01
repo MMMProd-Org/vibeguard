@@ -26,16 +26,26 @@ CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) |
 # Join backslash-newline continuations, then iterate shell-separated segments.
 JOINED=${CMD//$'\\'$'\n'/ }
 
-# git_subcommand <segment> : the first non-option token after `git` (skipping
-# global options + their values), or nothing. Reused from the hookspath guard so
-# only a real `git [globals] push` counts (not `git help push` / `rg "git push"`).
+# git_subcommand <segment> : the git subcommand when `git` is in COMMAND POSITION
+# (after optional env-assignments / wrappers), else nothing -- so a literal mention
+# NOT in command position (`echo git push`, `rg "git push"`) is not treated as a
+# push, honouring the fail-open contract. Skips git global options + their values.
 git_subcommand() {
-  local after tok skip=0 inq=""
-  after=$(sed -nE 's/.*(^|[^[:alnum:]_-])git[[:space:]]+(.*)$/\2/p' <<<"$1" | head -1 || true)
-  [ -n "$after" ] || return 0
+  local tok skip=0 inq="" seen_git=0
   # shellcheck disable=SC2086  # intentional word-split to tokenize the segment
-  for tok in $after; do
+  for tok in $1; do
     if [ -n "$inq" ]; then case "$tok" in *"$inq") inq="" ;; esac; continue; fi
+    if [ "$seen_git" = 0 ]; then
+      # `git` must be in command position (after optional env-assignments /
+      # wrappers); any other leading token means this is not a git command in
+      # position -> allow (so `echo git push` is not treated as a push).
+      case "$tok" in
+        *=*) continue ;;
+        sudo|env|command|time|nice|nohup) continue ;;
+        git|*/git) seen_git=1; continue ;;
+        *) return 0 ;;
+      esac
+    fi
     if [ "$skip" = 1 ]; then
       skip=0
       case "$tok" in

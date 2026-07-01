@@ -30,6 +30,7 @@ feed "git -C \"$BADREPO\" push";            ok $? 2 "quoted -C <repo missing pre
 feed_cwd "$BADREPO" "git help push";        ok $? 0 "git help push (push is an arg) -> allow"
 feed_cwd "$BADREPO" 'rg \"git push\" .';      ok $? 0 "literal push mention in a search -> allow"
 feed_cwd "$BADREPO" "echo prep && git push";  ok $? 2 "multi-cmd real push in bad repo -> BLOCK"
+feed_cwd "$BADREPO" "echo git push";           ok $? 0 "literal echo git-push (git not in cmd position) -> allow"
 
 # a push from a linked WORKTREE is judged by the WORKTREE's own checkout.
 PRIMARY=$(mkrepo)
