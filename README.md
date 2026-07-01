@@ -54,7 +54,26 @@ And the supporting pieces:
 - `scripts/merge-state.sh` — prints a read-only JSON snapshot of a PR's merge readiness (CI, review, unresolved bot threads) plus a recommended next action (optional helper; see below).
 - `advanced/` — notes on optional, heavier features (automatic pull-request review, isolated workspaces) that are **not** installed by default.
 
-## Want tighter control? (optional)
+## Optional guardrails
+
+The core above is everything a solo vibe-coder needs. Everything below is **off by default** — turn on only what fits your workflow. Each is a seatbelt: fail-open, never a false block.
+
+| If you want to… | Turn on |
+| --- | --- |
+| Narrow writes to specific folders inside your project | add a `.session-scope.json` |
+| Run several AI agents at once (one worktree each) | `install.sh --with-worktree-lock` |
+| Block a merge until a review bot's threads are resolved | `install.sh --with-merge-triage` |
+| Block a push that bypasses your git hooks | `install.sh --with-hookspath-guard` |
+| Make pull requests start as drafts | `install.sh --with-draft-mode` |
+| Require a code-review receipt before every push | `install.sh --with-review-receipt` |
+| Let an agent file findings without spamming issues | `scripts/agent-issue.sh` (helper) |
+| Block a push when a husky pre-push hook went missing | `install.sh --with-husky-guard` |
+| Get a paper trail before merging bot-reviewed PRs | `install.sh --with-merge-ack` |
+| Get a read-only snapshot of a PR's merge state | `scripts/merge-state.sh` (helper) |
+
+<a id="want-tighter-control-optional"></a>
+<details>
+<summary><strong>Narrow writes to specific folders inside your project</strong></summary>
 
 Out of the box, the scope guard blocks writes **outside** your project (the git and command guards above always run too). If you also want to limit writes to certain folders *inside* your project, create a file named `.session-scope.json`:
 
@@ -64,7 +83,11 @@ Out of the box, the scope guard blocks writes **outside** your project (the git 
 
 Now the AI can only write inside `src/` and `tests/`. Everything else is blocked.
 
-## Running several AI agents at once? (optional)
+</details>
+
+<a id="running-several-ai-agents-at-once-optional"></a>
+<details>
+<summary><strong>Run several AI agents at once (one worktree each)</strong></summary>
 
 If you run more than one agent across separate git worktrees, install the
 **worktree session-lock** so each agent stays pinned to its own worktree and
@@ -78,7 +101,11 @@ It records a small lock file when a session starts, and blocks shell commands
 whose working directory has drifted outside the locked worktree. It is off by
 default because a single agent in a single repo does not need it.
 
-## Using a code-review bot? (optional)
+</details>
+
+<a id="using-a-code-review-bot-optional"></a>
+<details>
+<summary><strong>Block a merge until a review bot's threads are resolved</strong></summary>
 
 If you open pull requests and let a review bot (CodeRabbit, Qodo, Copilot,
 Greptile, Sourcery, ...) comment on them, install the **merge-triage gate** so a
@@ -96,7 +123,11 @@ fail-open**: if you use no review bot, or `gh` is unavailable, it does nothing.
 - Pick which bots count with `VIBEGUARD_BOT_PATTERN` (a regex).
 - Bypass once with `VIBEGUARD_SKIP_TRIAGE=1` before your merge command.
 
-## Worried about your hooks being silently bypassed? (optional)
+</details>
+
+<a id="worried-about-your-hooks-being-silently-bypassed-optional"></a>
+<details>
+<summary><strong>Block a push that bypasses your git hooks</strong></summary>
 
 If an agent (or a stray command) redirects your repo's hooks somewhere harmless
 and then pushes, your pre-push checks are skipped without a trace. Install the
@@ -113,7 +144,11 @@ single-command check cannot see. It looks at the **local** setting only, so a
 legitimate global hooks setup (e.g. git-templates) is left alone. Off by
 default, and (like the other opt-ins) wired for **Claude Code** only.
 
-## Want pull requests to start as drafts? (optional)
+</details>
+
+<a id="want-pull-requests-to-start-as-drafts-optional"></a>
+<details>
+<summary><strong>Make pull requests start as drafts</strong></summary>
 
 If you open PRs with the `gh` CLI and want a review-first flow, install the
 **draft-mode gate**. It makes `gh pr create` require `--draft` (so a PR enters
@@ -129,7 +164,11 @@ It is opinionated and assumes a GitHub PR workflow, so it is **off by default**.
 It only inspects `gh` in command position (a literal `rg "gh pr create"` is fine)
 and, like the other opt-ins, is wired for **Claude Code** only.
 
-## Want a code-review receipt before every push? (optional)
+</details>
+
+<a id="want-a-code-review-receipt-before-every-push-optional"></a>
+<details>
+<summary><strong>Require a code-review receipt before every push</strong></summary>
 
 If you want a hard stop against pushing code straight from dev without a review
 pass, install the **review-receipt gate**. It intercepts a push and blocks it
@@ -154,7 +193,11 @@ It is opinionated, **off by default**, and wired for **Claude Code** only. It
 fails open on anything that is not a clearly-detected push, and exposes an
 audit-visible bypass (`SKIP_REVIEW_GATE=1`) for the rare case the gate is wrong.
 
-## Want an agent to file findings without spamming issues? (optional)
+</details>
+
+<a id="want-an-agent-to-file-findings-without-spamming-issues-optional"></a>
+<details>
+<summary><strong>Let an agent file findings without spamming issues</strong></summary>
 
 When an AI agent notices something out of scope while working, `scripts/agent-issue.sh`
 files it as a GitHub issue **de-duplicated by location** -- the same finding never opens
@@ -174,7 +217,11 @@ state lives in `.agent-backlog/` (counters, locks); a ready `.gitignore` scaffol
 
 This is a **helper you invoke**, not an install-time hook -- there is nothing to wire up.
 
-## Worried you deleted a git hook you rely on? (optional)
+</details>
+
+<a id="worried-you-deleted-a-git-hook-you-rely-on-optional"></a>
+<details>
+<summary><strong>Block a push when a husky pre-push hook went missing</strong></summary>
 
 If your repo uses [husky](https://typicode.github.io/husky/) for a `pre-push` hook,
 install the **husky-guard** so a push is blocked when `.husky/` exists but
@@ -191,7 +238,11 @@ does not use husky, or `pre-push` is present, nothing changes. Like the other
 opt-ins it is a seatbelt: an obfuscated command degrades to a skipped check, never
 a false block.
 
-## Want a paper trail before merging bot-reviewed PRs? (optional)
+</details>
+
+<a id="want-a-paper-trail-before-merging-bot-reviewed-prs-optional"></a>
+<details>
+<summary><strong>Get a paper trail before merging bot-reviewed PRs</strong></summary>
 
 If you use a review bot (CodeRabbit, Qodo, Copilot, ...) and want confirmation
 you have seen its latest feedback before a PR merge, install the **merge-ack gate**.
@@ -209,7 +260,11 @@ It is **off by default** and wired for **Claude Code** only. Like the other opt-
 it is a seatbelt -- fail-open: if `gh` is unavailable or the PR cannot be resolved,
 the merge is allowed through.
 
-## Want a read-only snapshot of a PR's merge state? (optional)
+</details>
+
+<a id="want-a-read-only-snapshot-of-a-prs-merge-state-optional"></a>
+<details>
+<summary><strong>Get a read-only snapshot of a PR's merge state</strong></summary>
 
 `scripts/merge-state.sh <PR>` prints a stable JSON snapshot of a pull request's merge
 readiness -- `mergeable` state, CI `pass`/`fail`/`pending`, review decision, and the count
@@ -226,6 +281,8 @@ mutates, or merges -- it only reports, so it is safe to run anytime. An optional
 `.vibeguard/merge-policy.json` (or `$VIBEGUARD_MERGE_POLICY`) can rename actions, disable
 gates, or override the bot pattern; a malformed policy is ignored. Like `agent-issue.sh`,
 this is a **helper you invoke**, not an install-time hook.
+
+</details>
 
 ## Turning it off
 
