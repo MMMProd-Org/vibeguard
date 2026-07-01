@@ -87,5 +87,16 @@ RQF=$(mkrepo)
 feed_fail(){ local dir="$1" cmd="$2"; printf '%s' "$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')" | ( cd "$dir" && PATH="$STUBFAIL:$PATH" VIBEGUARD_ACK_THREADS_JSON="$THREADS" "$BASH_BIN" "$HOOK" >/dev/null 2>&1 ); }
 feed_fail "$RQF" 'gh pr merge 42 --body "pr merge note"';  ok $? 2 "hook: explicit PR + quoted flag containing pr-merge text, gh fails -> still BLOCK (non-greedy strip)"
 
+
+# ---- new: F7 verify outside a git worktree -> allow (no false block) ----
+NGDIR=$(mktemp -d)
+( cd "$NGDIR" && VIBEGUARD_ACK_THREADS_JSON="$THREADS" "$BASH_BIN" "$CHECK" --verify 42 >/dev/null 2>&1 ); ok $? 0 "verify: outside a git worktree -> allow (no false block)"
+
+# ---- new: F8 future ts_epoch -> allow (clock skew) ----
+RF8=$(mkrepo)
+( cd "$RF8" && VIBEGUARD_ACK_THREADS_JSON="$THREADS" "$BASH_BIN" "$CHECK" 42 >/dev/null 2>&1 )
+future=$(( $(date -u +%s) + 99999 ))
+python3 -c 'import io,re,sys; p=sys.argv[1]; s=io.open(p).read(); io.open(p,"w").write(re.sub(r"^ts_epoch: .*$","ts_epoch: "+sys.argv[2],s,flags=re.M))' "$RF8/.agent-backlog/triaged-prs/42.ack" "$future"
+runv "$RF8" 42; ok $? 0 "verify: future ts_epoch -> allow (clock skew)"
 echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

@@ -68,8 +68,10 @@ write_ack(){
   hash=$(printf '%s\n' "$ids" | _sha_stream)
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ); epoch=$(date -u +%s)
   root=$(_repo_root); [ -n "$root" ] || root="$(pwd)"
-  dir="$root/.agent-backlog/triaged-prs"; mkdir -p "$dir"; f="$dir/$pr.ack"
-  {
+  dir="$root/.agent-backlog/triaged-prs"
+  mkdir -p "$dir" 2>/dev/null || { echo "merge-ack: cannot create $dir" >&2; exit 1; }
+  f="$dir/$pr.ack"
+  if ! {
     echo "---"; echo "pr: $pr"; echo "timestamp: $now"; echo "ts_epoch: $epoch"
     echo "comments_hash: $hash"; echo "threads_triaged: $n"; echo "verdicts: $verdicts"; echo "---"; echo ""
     echo "# merge-ack -- PR #$pr"; echo ""
@@ -77,8 +79,8 @@ write_ack(){
     printf '%s\n' "$ids" | while IFS= read -r id; do
       [ -n "$id" ] && echo "- thread $id -- verdict: ___ (fix | decline | defer | already-resolved)"
     done
-  } > "$f.tmp"
-  mv -f "$f.tmp" "$f"
+  } > "$f.tmp"; then echo "merge-ack: cannot write $f.tmp" >&2; exit 1; fi
+  mv -f "$f.tmp" "$f" || { echo "merge-ack: cannot finalize $f" >&2; exit 1; }
   echo "Wrote $f (hash=$hash, threads=$n). Re-run after new bot feedback; expires after ${ACK_TTL}s." >&2
   exit 0
 }
@@ -97,14 +99,14 @@ verify_ack(){
   repo=$(_resolve_repo "$repo")
   ids=$(_thread_ids "$repo" "$pr") || exit 0
   [ -n "$ids" ] || exit 0
-  root=$(_repo_root); [ -n "$root" ] || root="$(pwd)"
+  root=$(_repo_root); [ -n "$root" ] || exit 0
   f="$root/.agent-backlog/triaged-prs/$pr.ack"
   [ -f "$f" ] || exit 2
   epoch_ack=$(sed -nE 's/^ts_epoch: ([0-9]+)$/\1/p' "$f" | head -1)
   hash_ack=$(sed -nE 's/^comments_hash: ([0-9a-f]{64})$/\1/p' "$f" | head -1)
   [ -n "$epoch_ack" ] && [ -n "$hash_ack" ] || exit 2
   now=$(date -u +%s); age=$((now - epoch_ack))
-  [ "$age" -ge 0 ] && [ "$age" -le "$ACK_TTL" ] || exit 2
+  [ "$age" -le "$ACK_TTL" ] || exit 2
   cur=$(printf '%s\n' "$ids" | _sha_stream)
   [ "$cur" = "$hash_ack" ] || exit 2
   exit 0
