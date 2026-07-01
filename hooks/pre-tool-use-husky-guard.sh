@@ -8,8 +8,9 @@ set -euo pipefail
 # hook is MISSING -- closing the deleted-pre-push footgun where the checks you
 # rely on at push time silently do not run. No .husky, or pre-push present -> allow.
 #
-# It resolves the PRIMARY repo root (via --git-common-dir) so the check holds from
-# any linked worktree, and honours `git -C <path> push` (with ~/$HOME expansion).
+# It checks the WORKING-TREE ROOT of the pushing repo (git runs non-bare hooks from
+# there, and husky's core.hooksPath=.husky is relative), so a push from a linked
+# worktree is judged by its OWN checkout, not the primary's. Honours `git -C <path>`.
 #
 # SCOPE (seatbelt, not a vault -- see README): fail-OPEN. A missing pre-push is a
 # mistake, not an attack, so anything this cannot cleanly resolve (an unreadable
@@ -57,7 +58,7 @@ git_subcommand() {
 
 # check_segment <segment> : exit 2 to BLOCK; return 0 to allow.
 check_segment() {
-  local SEG="$1" CVAL TARGET_REPO COMMON_DIR PRIMARY_ROOT
+  local SEG="$1" CVAL TARGET_REPO ROOT
   # Only a plainly-parsed `push` proceeds. An ambiguous subcommand ('?', from an
   # unparseable quoted option value) fails OPEN -> allow (never a false block).
   case "$(git_subcommand "$SEG")" in
@@ -89,21 +90,17 @@ check_segment() {
     TARGET_REPO="."
   fi
 
-  # PRIMARY repo root = parent of --git-common-dir (so the check holds from a
-  # linked worktree too). Best-effort: anything unresolved -> allow (fail-open).
-  COMMON_DIR=$(git -C "$TARGET_REPO" rev-parse --git-common-dir 2>/dev/null || true)
-  [ -n "$COMMON_DIR" ] || return 0
-  case "$COMMON_DIR" in
-    /*) ;;
-    *) COMMON_DIR="$(cd "$TARGET_REPO" 2>/dev/null && cd "$COMMON_DIR" 2>/dev/null && pwd)" || return 0 ;;
-  esac
-  [ -n "$COMMON_DIR" ] || return 0
-  PRIMARY_ROOT="$(dirname "$COMMON_DIR")"
+  # The pre-push hook that actually runs is resolved from the WORKING-TREE ROOT of
+  # the pushing repo/worktree (git runs non-bare hooks there; husky's relative
+  # core.hooksPath=.husky resolves there too). Check THAT root, so a push from a
+  # worktree is judged by its own checkout. Unresolved target -> allow (fail-open).
+  ROOT=$(git -C "$TARGET_REPO" rev-parse --show-toplevel 2>/dev/null || true)
+  [ -n "$ROOT" ] || return 0
 
   # husky set up but pre-push gone -> block. (husky v9 sources the user file via
   # .husky/_/pre-push, so the user-facing file needs no executable bit.)
-  if [ -d "$PRIMARY_ROOT/.husky" ] && [ ! -f "$PRIMARY_ROOT/.husky/pre-push" ]; then
-    echo "BLOCKED : git push, but $PRIMARY_ROOT/.husky/pre-push is missing." >&2
+  if [ -d "$ROOT/.husky" ] && [ ! -f "$ROOT/.husky/pre-push" ]; then
+    echo "BLOCKED : git push, but $ROOT/.husky/pre-push is missing." >&2
     echo "This repo uses husky; the pre-push hook that guards your push is gone." >&2
     echo "Restore .husky/pre-push before pushing (or remove .husky/ if husky is unused)." >&2
     exit 2

@@ -31,15 +31,18 @@ feed_cwd "$BADREPO" "git help push";        ok $? 0 "git help push (push is an a
 feed_cwd "$BADREPO" 'rg \"git push\" .';      ok $? 0 "literal push mention in a search -> allow"
 feed_cwd "$BADREPO" "echo prep && git push";  ok $? 2 "multi-cmd real push in bad repo -> BLOCK"
 
-# from a linked WORKTREE, the primary repo's missing pre-push must still block.
+# a push from a linked WORKTREE is judged by the WORKTREE's own checkout.
 PRIMARY=$(mkrepo)
 git -C "$PRIMARY" config user.email t@t; git -C "$PRIMARY" config user.name t
 printf x > "$PRIMARY/f"; git -C "$PRIMARY" add f; git -C "$PRIMARY" commit -qm base >/dev/null 2>&1
-mkdir -p "$PRIMARY/.husky"   # husky set up on primary, pre-push missing
 WT2="${PRIMARY}-wt"; git -C "$PRIMARY" worktree add -q "$WT2" >/dev/null 2>&1
-feed_cwd "$WT2" "git push";                   ok $? 2 "push from a worktree, primary missing pre-push -> BLOCK"
-: > "$PRIMARY/.husky/pre-push"
-feed_cwd "$WT2" "git push";                   ok $? 0 "push from a worktree, primary has pre-push -> allow"
+mkdir -p "$WT2/.husky"   # husky present IN THE WORKTREE, pre-push missing
+feed_cwd "$WT2" "git push";                   ok $? 2 "push from a worktree, worktree missing pre-push -> BLOCK"
+: > "$WT2/.husky/pre-push"
+feed_cwd "$WT2" "git push";                   ok $? 0 "push from a worktree, worktree has pre-push -> allow"
+mkdir -p "$PRIMARY/.husky"   # primary has husky, no pre-push
+WT3="${PRIMARY}-wt3"; git -C "$PRIMARY" worktree add -q "$WT3" >/dev/null 2>&1
+feed_cwd "$WT3" "git push";                   ok $? 0 "worktree without husky -> allow (primary bad .husky irrelevant)"
 
 feed "git -C $BADREPO push" PATH="/nonexistent";  ok $? 0 "jq absent -> allow (fail-open)"
 
