@@ -28,8 +28,12 @@ while [ $# -gt 0 ]; do
       REPO="${2:-}"
       case "$REPO" in ''|-*) echo "merge-state: $1 requires an owner/repo value." >&2; exit 1 ;; esac
       shift 2 ;;
-    -R*)       REPO="${1#-R}"; REPO="${REPO#=}"; shift ;;  # glued -Rowner/repo or -R=owner/repo
-    --repo=*)  REPO="${1#--repo=}"; shift ;;
+    -R*)       REPO="${1#-R}"; REPO="${REPO#=}"                # glued -Rowner/repo or -R=owner/repo
+               [ -n "$REPO" ] || { echo "merge-state: -R requires an owner/repo value." >&2; exit 1; }
+               shift ;;
+    --repo=*)  REPO="${1#--repo=}"
+               [ -n "$REPO" ] || { echo "merge-state: --repo requires an owner/repo value." >&2; exit 1; }
+               shift ;;
     -h|--help) usage; exit 0 ;;                            # --help is not an error (exit 0)
     -*)        echo "merge-state: unknown option '$1'." >&2; usage; exit 1 ;;
     *) if [ -n "$PR" ]; then echo "merge-state: unexpected extra argument '$1' (one PR only)." >&2; usage; exit 1; fi

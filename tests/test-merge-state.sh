@@ -90,6 +90,8 @@ RC=0; run "$D" -R       >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R missing value -
 RC=0; run "$D" 5 -R /repo        >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R /repo (empty owner) -> exit 1"
 RC=0; run "$D" 5 -R owner/       >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R owner/ (empty repo) -> exit 1"
 RC=0; run "$D" 5 -R owner/repo/x >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R owner/repo/x (extra slash) -> exit 1"
+RC=0; run "$D" 5 -R=       >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R= (explicit empty) -> exit 1"
+RC=0; run "$D" 5 --repo=   >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "--repo= (explicit empty) -> exit 1"
 RC=0; run "$D" 5 --bogus >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "unknown option -> exit 1"
 RC=0; run "$D" --help   >/dev/null 2>&1 || RC=$?; ok "$RC" 0 "--help -> exit 0 (not an error)"
 
