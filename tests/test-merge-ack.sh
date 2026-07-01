@@ -8,7 +8,7 @@ HOOK="${HOOK_PATH:-$VG/hooks/pre-tool-use-merge-ack.sh}"
 BASH_BIN="$(command -v bash)"
 PASS=0; FAIL=0
 ok(){ if [ "$1" = "$2" ]; then PASS=$((PASS+1)); echo "  PASS $3"; else FAIL=$((FAIL+1)); echo "  FAIL $3 (got $1 want $2)"; fi; }
-mkrepo(){ local d; d=$(mktemp -d); git init -q "$d"; ( cd "$d" && git commit -q --allow-empty -m init ); printf '%s' "$d"; }
+mkrepo(){ local d; d=$(mktemp -d); git init -q "$d"; ( cd "$d" && git -c user.email=vibeguard@example.com -c user.name=vibeguard commit -q --allow-empty -m init ); printf '%s' "$d"; }
 THREADS='[{"id":11,"author":"qodo-code-review[bot]"},{"id":7,"author":"Copilot"},{"id":3,"author":"some-human"}]'
 
 R1=$(mkrepo)
@@ -50,6 +50,36 @@ TGT=$(mkrepo)
 ok "$([ -f "$TGT/.claude/hooks/pre-tool-use-merge-ack.sh" ] && echo yes || echo no)" yes "install copies the hook"
 ok "$([ -f "$TGT/.claude/hooks/check-merge-ack.sh" ] && echo yes || echo no)" yes "install copies the checker helper"
 ok "$(grep -c 'pre-tool-use-merge-ack.sh' "$TGT/.claude/settings.json" 2>/dev/null || echo 0)" 1 "hook registered in settings"
+
+# ---- new: B flag-value tests ----
+SOMEREPO=$(mkrepo)
+feed "$SOMEREPO" 'gh pr edit 5 --title "pr merge fix"';  ok $? 0 "hook: 'pr merge' inside a flag value (edit subcommand) -> allow"
+feed "$SOMEREPO" 'gh pr list --search "pr merge"';                  ok $? 0 "hook: 'pr merge' inside --search flag -> allow"
+
+# ---- new: A no-selector gh pr merge stub tests ----
+STUB=$(mktemp -d)
+cat > "$STUB/gh" <<'GHEOF'
+#!/usr/bin/env bash
+case "$*" in
+  *"pr view"*"--json number"*) echo 77 ;;
+  *"repo view"*) echo "MMMProd-Org/vibeguard" ;;
+  *) exit 1 ;;
+esac
+GHEOF
+chmod +x "$STUB/gh"
+feed_pathgh(){ local dir="$1" cmd="$2"; printf '%s' "$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')" | ( cd "$dir" && PATH="$STUB:$PATH" VIBEGUARD_ACK_THREADS_JSON="$THREADS" "$BASH_BIN" "$HOOK" >/dev/null 2>&1 ); }
+RNOARG=$(mkrepo)
+feed_pathgh "$RNOARG" "gh pr merge --squash";  ok $? 2 "hook: no-selector merge resolves current PR -> BLOCK (threads, no ack)"
+( cd "$RNOARG" && VIBEGUARD_ACK_THREADS_JSON="$THREADS" "$BASH_BIN" "$CHECK" 77 >/dev/null 2>&1 )
+feed_pathgh "$RNOARG" "gh pr merge --squash";  ok $? 0 "hook: no-selector merge with fresh ack -> allow"
+
+# ---- new: C writer honors -R ----
+RWRITE=$(mkrepo)
+( cd "$RWRITE" && VIBEGUARD_ACK_THREADS_JSON="$THREADS" "$BASH_BIN" "$CHECK" -R MMMProd-Org/vibeguard 88 >/dev/null 2>&1 )
+ok "$([ -f "$RWRITE/.agent-backlog/triaged-prs/88.ack" ] && echo yes || echo no)" yes "writer: -R flag accepted, ack file created"
+
+# ---- new: D zero bot threads -> exit 0 ----
+( cd "$(mkrepo)" && VIBEGUARD_ACK_THREADS_JSON='[{"id":3,"author":"human"}]' "$BASH_BIN" "$CHECK" 42 >/dev/null 2>&1 ); ok $? 0 "writer: zero bot threads -> exit 0 (no-op)"
 
 echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

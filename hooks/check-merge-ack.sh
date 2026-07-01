@@ -46,11 +46,23 @@ _thread_ids(){
 
 # ---- writer ----
 write_ack(){
-  local pr="$1" verdicts="${2:-pending-verdicts}" repo root ids n hash now epoch dir f
-  case "$pr" in ''|*[!0-9]*) echo "Usage: $0 <PR> [verdicts]" >&2; exit 1 ;; esac
-  repo=$(_resolve_repo "")
-  ids=$(_thread_ids "$repo" "$pr" || true)
-  if [ -z "$ids" ]; then echo "PR #$pr: no bot threads; no ack needed." >&2; exit 2; fi
+  local pr="" verdicts="pending-verdicts" repo="" root ids n hash now epoch dir f
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -R|--repo) repo="${2:-}"; shift; [ $# -gt 0 ] && shift ;;
+      *) if [ -z "$pr" ]; then pr="$1"; else verdicts="$1"; fi; shift ;;
+    esac
+  done
+  case "$pr" in ''|*[!0-9]*) echo "Usage: $0 [-R owner/repo] <PR> [verdicts]" >&2; exit 1 ;; esac
+  repo=$(_resolve_repo "$repo")
+  if ! ids=$(_thread_ids "$repo" "$pr"); then
+    echo "merge-ack: could not fetch bot threads for PR #$pr (gh/auth/API?)." >&2
+    exit 1
+  fi
+  if [ -z "$ids" ]; then
+    echo "PR #$pr: no bot threads; no ack needed." >&2
+    exit 0
+  fi
   n=$(printf '%s\n' "$ids" | grep -c .)
   hash=$(printf '%s\n' "$ids" | _sha_stream)
   now=$(date -u +%Y-%m-%dT%H:%M:%SZ); epoch=$(date -u +%s)
@@ -100,6 +112,6 @@ verify_ack(){
 # ---- dispatch ----
 case "${1:-}" in
   --verify) shift; verify_ack "$@" ;;
-  '' ) echo "Usage: $0 <PR> [verdicts] | --verify <PR> [-R owner/repo]" >&2; exit 1 ;;
+  '' ) echo "Usage: $0 [-R owner/repo] <PR> [verdicts] | --verify <PR> [-R owner/repo]" >&2; exit 1 ;;
   * ) write_ack "$@" ;;
 esac

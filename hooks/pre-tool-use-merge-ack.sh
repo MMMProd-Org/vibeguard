@@ -17,18 +17,20 @@ TOOL=$(printf '%s' "$PAYLOAD" | jq -r '.tool_name // empty' 2>/dev/null || echo 
 [ "$TOOL" = "Bash" ] || exit 0
 CMD=$(printf '%s' "$PAYLOAD" | jq -r '.tool_input.command // empty' 2>/dev/null || echo "")
 [ -n "$CMD" ] || exit 0
-_first=$(printf '%s' "$CMD" | awk '{
+_sub=$(printf '%s' "$CMD" | awk '{
   i=1
   while ($i ~ /^[A-Za-z_][A-Za-z0-9_]*=/) i++
   while ($i=="sudo"||$i=="env"||$i=="command"||$i=="nohup"||$i=="nice") i++
-  print $i
+  if ($i!="gh" && $i !~ /\/gh$/) { print ""; exit }
+  i++
+  while ($i ~ /^-/) i++
+  print $i" "$(i+1)
 }')
-case "$_first" in gh|*/gh) : ;; *) exit 0 ;; esac
-case "$CMD" in *"pr merge"*) : ;; *) exit 0 ;; esac
+case "$_sub" in "pr merge") : ;; *) exit 0 ;; esac
 [ -n "${VIBEGUARD_ACK_THREADS_JSON:-}" ] || command -v gh >/dev/null 2>&1 || exit 0
 
 REPO=$(printf '%s' "$CMD" | grep -oE '(-R|--repo)[=[:space:]]?[^[:space:]]+/[^[:space:]]+' | head -1 | sed -E 's/^(-R|--repo)[=[:space:]]?//' || true)
-after=$(printf '%s' "$CMD" | sed -E 's/^.*gh pr merge[[:space:]]*//')
+after=$(printf '%s' "$CMD" | sed -E 's/^.*pr merge[[:space:]]*//')
 PR=""; BRANCH=""; skip_next=0
 # shellcheck disable=SC2086
 for tok in $after; do
@@ -45,6 +47,7 @@ done
 if [ -z "$PR" ] && [ -n "$BRANCH" ] && command -v gh >/dev/null 2>&1; then
   PR=$(gh pr view "$BRANCH" ${REPO:+-R "$REPO"} --json number -q '.number' 2>/dev/null || echo "")
 fi
+[ -n "$PR" ] || PR=$(gh pr view ${REPO:+-R "$REPO"} --json number -q '.number' 2>/dev/null || echo "")
 [ -n "$PR" ] || exit 0
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
