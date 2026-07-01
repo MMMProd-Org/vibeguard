@@ -169,5 +169,112 @@ OUT=$(run "$(mkgh "$PVF" "$THF")" 5)
 ok "$(na "$OUT")" fix_ci "BLOCKED + failing ci -> fix_ci (specific cause wins)"
 ok "$(bl "$OUT")" '["fix_ci","resolve_block"]' "blockers: BLOCKED listed after the specific cause"
 
+
+# ================= PR-c: optional decision policy (.vibeguard/merge-policy.json / $VIBEGUARD_MERGE_POLICY) =================
+mkpol(){ local p; p=$(mktemp); printf '%s' "$1" >"$p"; echo "$p"; }
+
+# action_labels renames the action token in next_action + blockers; reason stays
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"action_labels":{"fix_ci":"ci_red"}}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" ci_red "policy: action_labels renames next_action"
+ok "$(bl "$OUT")" '["ci_red"]' "policy: blockers renamed"
+ok "$(rs "$OUT")" "1 failing check(s)" "policy: reason unchanged by rename"
+
+# disabled_gates removes a gate before next_action is chosen
+pv '[{"conclusion":"SUCCESS"}]' UNKNOWN UNKNOWN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"disabled_gates":["wait_mergeability"]}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" ready "policy: disabled gate -> ready"
+ok "$(bl "$OUT")" '[]' "policy: disabled gate absent from blockers"
+
+# bot_pattern override via policy
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads "[$(node false 'alice')]" >"$THF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"bot_pattern":"alice"}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(printf '%s' "$OUT"|jq -r '.unresolved_bot_threads')" 1 "policy: bot_pattern counts alice"
+# explicit env VIBEGUARD_BOT_PATTERN wins over policy bot_pattern
+OUT=$(VIBEGUARD_BOT_PATTERN='nobody' VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(printf '%s' "$OUT"|jq -r '.unresolved_bot_threads')" 0 "env bot_pattern wins over policy"
+
+# disable ONE gate while another remains (regression: filter must not drop all)
+pv '[{"conclusion":"FAILURE"},{"status":"IN_PROGRESS","conclusion":""}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"disabled_gates":["wait_ci"]}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" fix_ci "policy: disable one gate, another remains -> fix_ci"
+ok "$(bl "$OUT")" '["fix_ci"]' "policy: only the disabled gate removed"
+# rename + disable combined
+POL=$(mkpol '{"action_labels":{"fix_ci":"ci_red"},"disabled_gates":["wait_ci"]}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" ci_red "policy: rename+disable -> ci_red"
+ok "$(bl "$OUT")" '["ci_red"]' "policy: rename+disable blockers=[ci_red]"
+
+# invalid policy JSON -> fail-soft to defaults, exit 0
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+BADPOL=$(mkpol 'not json {{{')
+OUT=$(VIBEGUARD_MERGE_POLICY="$BADPOL" run "$D" 5); RC=$?
+ok "$RC" 0 "invalid policy -> exit 0 (fail-soft)"
+ok "$(na "$OUT")" fix_ci "invalid policy -> defaults (fix_ci)"
+
+# no policy -> defaults unchanged
+OUT=$(run "$D" 5); ok "$(na "$OUT")" fix_ci "no policy -> default next_action"
+
+# valid-but-wrong-SHAPE policy must fail-soft to defaults (never brick, never silent mis-gate)
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+for bad in '[]' '42' '"x"' 'true' '{"action_labels":[]}' '{"disabled_gates":5}'; do
+  POL=$(mkpol "$bad"); OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5); RC=$?
+  ok "$RC" 0 "wrong-shape policy $bad -> exit 0 (no brick)"
+  ok "$(na "$OUT")" fix_ci "wrong-shape policy $bad -> defaults (fix_ci)"
+done
+# disabled_gates as a STRING must NOT silently disable via substring match
+POL=$(mkpol '{"disabled_gates":"fix_ci"}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" fix_ci "disabled_gates string -> NOT disabled (fix_ci, not ready)"
+# action_labels must not collapse a real gate onto reserved "ready"
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE BLOCKED APPROVED >"$PVF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"action_labels":{"resolve_block":"ready"}}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" resolve_block "action_labels ready-collision dropped -> resolve_block"
+ok "$(bl "$OUT")" '["resolve_block"]' "ready-collision: blockers not relabeled to ready"
+# auto-detect <repo-root>/.vibeguard/merge-policy.json (no env var)
+AREPO=$(mktemp -d); git -C "$AREPO" init -q >/dev/null 2>&1; mkdir -p "$AREPO/.vibeguard"
+printf '%s' '{"action_labels":{"fix_ci":"ci_red"}}' >"$AREPO/.vibeguard/merge-policy.json"
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; D=$(mkgh "$PVF" "$THF")
+OUT=$( cd "$AREPO" && PATH="$D:$PATH" bash "$SCRIPT" 5 2>/dev/null )
+ok "$(na "$OUT")" ci_red "auto-detect .vibeguard/merge-policy.json"
+
+# non-string action_labels value must be ignored (blockers/next_action stay string tokens)
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+for badlbl in '{"action_labels":{"fix_ci":5}}' '{"action_labels":{"fix_ci":false}}' '{"action_labels":{"fix_ci":["x"]}}'; do
+  POL=$(mkpol "$badlbl"); OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+  ok "$(na "$OUT")" fix_ci "non-string action_labels $badlbl -> ignored (fix_ci)"
+done
+# disabled_gates with mixed types drops only the valid string element
+pv '[{"conclusion":"FAILURE"},{"status":"IN_PROGRESS","conclusion":""}]' MERGEABLE CLEAN APPROVED >"$PVF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"disabled_gates":["wait_ci",5,{"a":1}]}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" fix_ci "disabled_gates mixed types -> string element applied"
+ok "$(bl "$OUT")" '["fix_ci"]' "disabled_gates mixed types -> only wait_ci dropped"
+
+# action_labels must not relabel the reserved "ready" SENTINEL KEY (Codex P2)
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"action_labels":{"ready":"ship"}}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" ready "action_labels {ready:ship} ignored -> next_action stays ready"
+
+# a policy path starting with '-' must still load (jq -- guard, no option injection)
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+DASHDIR=$(mktemp -d); printf '%s' '{"action_labels":{"fix_ci":"ci_red"}}' >"$DASHDIR/-dash.json"
+OUT=$( cd "$DASHDIR" && VIBEGUARD_MERGE_POLICY="-dash.json" PATH="$D:$PATH" bash "$SCRIPT" 5 2>/dev/null )
+ok "$(na "$OUT")" ci_red "policy path starting with '-' still loads (jq --)"
+
+# a multi-document policy file must fail-soft to defaults, not brick (Codex P2)
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+MULTIPOL=$(mkpol '{"action_labels":{"fix_ci":"ci_red"}}
+{}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$MULTIPOL" run "$D" 5); RC=$?
+ok "$RC" 0 "multi-document policy -> exit 0 (fail-soft)"
+ok "$(na "$OUT")" fix_ci "multi-document policy -> defaults (fix_ci, not ci_red)"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
