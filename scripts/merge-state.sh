@@ -5,7 +5,9 @@ set -uo pipefail
 #
 # Prints a stable JSON snapshot of a PR's merge readiness on stdout:
 #   { pr, title, head, base, mergeable, merge_state, review_decision,
-#     ci:{pass,fail,pending}, unresolved_bot_threads }
+#     ci:{pass,fail,pending}, unresolved_bot_threads,
+#     blockers:[...], next_action, reason }
+# blockers = every active gate in priority order; next_action = blockers[0] or "ready".
 # It NEVER blocks, mutates, or merges anything -- it only reads via `gh`.
 #
 #   merge-state.sh <PR> [-R owner/repo]
@@ -92,4 +94,31 @@ printf '%s' "$PV" | jq --argjson t "$THREADS" '
     mergeable: .mergeable, merge_state: .mergeStateStatus,
     review_decision: (.reviewDecision // ""),
     ci: (reduce (.statusCheckRollup[]?) as $x ({pass:0,fail:0,pending:0}; .[($x|bucket)] += 1)),
-    unresolved_bot_threads: $t }'
+    unresolved_bot_threads: $t } as $b
+  | [ (if ($b.merge_state=="DIRTY" or $b.mergeable=="CONFLICTING") then "resolve_conflicts" else empty end),
+      (if $b.merge_state=="DRAFT"  then "mark_ready"    else empty end),
+      (if $b.merge_state=="BEHIND" then "update_branch" else empty end),
+      (if ($b.mergeable=="UNKNOWN" or $b.merge_state=="UNKNOWN") then "wait_mergeability" else empty end),
+      (if $b.ci.fail>0    then "fix_ci"  else empty end),
+      (if $b.ci.pending>0 then "wait_ci" else empty end),
+      (if $b.unresolved_bot_threads==null then "verify_threads"
+       elif $b.unresolved_bot_threads>0   then "resolve_threads" else empty end),
+      (if $b.review_decision=="CHANGES_REQUESTED" then "address_changes" else empty end),
+      (if $b.review_decision=="REVIEW_REQUIRED"   then "request_review"  else empty end),
+      (if $b.merge_state=="BLOCKED" then "resolve_block" else empty end)
+    ] as $bl
+  | ($bl[0] // "ready") as $na
+  | $b + { blockers: $bl, next_action: $na,
+           reason:
+             (if   $na=="fix_ci"            then "\($b.ci.fail) failing check(s)"
+              elif $na=="wait_ci"           then "\($b.ci.pending) pending check(s)"
+              elif $na=="resolve_threads"   then "\($b.unresolved_bot_threads) unresolved bot thread(s)"
+              elif $na=="verify_threads"    then "bot-thread state unknown (fetch failed)"
+              elif $na=="resolve_conflicts" then "merge conflict / dirty"
+              elif $na=="mark_ready"        then "PR is a draft"
+              elif $na=="update_branch"     then "branch is behind base"
+              elif $na=="wait_mergeability" then "mergeability not yet known"
+              elif $na=="address_changes"   then "changes requested"
+              elif $na=="request_review"    then "review required"
+              elif $na=="resolve_block"     then "blocked by branch protection (no visible cause)"
+              else "clean, mergeable" end) }'
