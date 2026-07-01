@@ -1,0 +1,4 @@
+# vibeguard agent-backlog: local per-story dedup state (counters, locks, meta).
+# Runtime-generated, never committed. This file keeps the folder + the convention.
+*
+!.gitignore
