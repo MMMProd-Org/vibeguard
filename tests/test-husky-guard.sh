@@ -43,5 +43,11 @@ feed_cwd "$WT2" "git push";                   ok $? 0 "push from a worktree, pri
 
 feed "git -C $BADREPO push" PATH="/nonexistent";  ok $? 0 "jq absent -> allow (fail-open)"
 
+# fail-open contract: --git-dir/--work-tree targeting + ambiguous quoting must NOT
+# block, even in a husky repo missing pre-push.
+feed_cwd "$BADREPO" "git --git-dir=$BADREPO/.git push";  ok $? 0 "--git-dir push in bad repo -> allow (fail-open)"
+feed_cwd "$BADREPO" "git --work-tree=$BADREPO push";     ok $? 0 "--work-tree push in bad repo -> allow (fail-open)"
+feed "git -C \"oops push";                              ok $? 0 "ambiguous unclosed-quote -C -> allow (fail-open)"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

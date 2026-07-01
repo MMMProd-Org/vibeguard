@@ -58,10 +58,18 @@ git_subcommand() {
 # check_segment <segment> : exit 2 to BLOCK; return 0 to allow.
 check_segment() {
   local SEG="$1" CVAL TARGET_REPO COMMON_DIR PRIMARY_ROOT
+  # Only a plainly-parsed `push` proceeds. An ambiguous subcommand ('?', from an
+  # unparseable quoted option value) fails OPEN -> allow (never a false block).
   case "$(git_subcommand "$SEG")" in
-    push|"?") : ;;
+    push) : ;;
     *) return 0 ;;
   esac
+
+  # --git-dir/--work-tree retarget the repo in a way we do not resolve here; fail
+  # OPEN (allow) rather than check the wrong repo and risk a false block.
+  if grep -qE '(^|[[:space:]])--(git-dir|work-tree)([[:space:]]|=)' <<<"$SEG"; then
+    return 0
+  fi
 
   # Resolve `git -C <path>` (strip one layer of matching quotes; expand ~/$HOME the
   # shell would); with no -C, check the cwd repo.
