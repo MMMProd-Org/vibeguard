@@ -94,6 +94,7 @@ RC=0; run "$D" 5 -R=       >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R= (explicit e
 RC=0; run "$D" 5 --repo=   >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "--repo= (explicit empty) -> exit 1"
 RC=0; run "$D" 5 --bogus >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "unknown option -> exit 1"
 RC=0; run "$D" --help   >/dev/null 2>&1 || RC=$?; ok "$RC" 0 "--help -> exit 0 (not an error)"
+HOUT=$(run "$D" --help); ok "$(printf '%s' "$HOUT" | grep -c usage)" 1 "--help prints usage to stdout"
 
 # paginate: gh --paginate concatenates pages; jq -rs must flatten both -> count 2
 pv '[]' >"$PVF"

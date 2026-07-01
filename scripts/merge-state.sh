@@ -18,7 +18,7 @@ set -uo pipefail
 
 BOT_PATTERN="${VIBEGUARD_BOT_PATTERN:-coderabbit|qodo|copilot|sourcery|vercel|cursor|greptile|github-code-quality}"
 
-usage(){ echo "usage: $0 <PR> [-R owner/repo]" >&2; }
+usage(){ echo "usage: $0 <PR> [-R owner/repo]" >&"${1:-2}"; }  # arg 1 = target fd (1=stdout for --help)
 
 # ---- args: a positional numeric PR + optional -R/--repo owner/repo ----
 PR=""; REPO=""
@@ -34,7 +34,7 @@ while [ $# -gt 0 ]; do
     --repo=*)  REPO="${1#--repo=}"
                [ -n "$REPO" ] || { echo "merge-state: --repo requires an owner/repo value." >&2; exit 1; }
                shift ;;
-    -h|--help) usage; exit 0 ;;                            # --help is not an error (exit 0)
+    -h|--help) usage 1; exit 0 ;;                          # help -> stdout, exit 0 (not an error)
     -*)        echo "merge-state: unknown option '$1'." >&2; usage; exit 1 ;;
     *) if [ -n "$PR" ]; then echo "merge-state: unexpected extra argument '$1' (one PR only)." >&2; usage; exit 1; fi
        PR="$1"; shift ;;
