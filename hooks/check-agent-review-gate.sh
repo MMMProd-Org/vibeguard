@@ -120,7 +120,7 @@ receipt_path() {
 }
 
 resolve_base_ref() {
-  local upstream cur
+  local upstream cur cand
   # Current branch name; empty on detached HEAD / worktree-on-commit checkouts.
   cur=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
   if upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
@@ -137,15 +137,14 @@ resolve_base_ref() {
     fi
   fi
 
-  if git rev-parse --verify --quiet origin/main >/dev/null; then
-    printf '%s\n' "origin/main"
-    return 0
-  fi
-
-  if git rev-parse --verify --quiet main >/dev/null; then
-    printf '%s\n' "main"
-    return 0
-  fi
+  # Integration base, in order of preference. `master` is honoured too so a
+  # master-default repo does not collapse to the root commit (a false surface).
+  for cand in origin/main main origin/master master; do
+    if git rev-parse --verify --quiet "$cand" >/dev/null; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+  done
 
   git rev-list --max-parents=0 HEAD | tail -1
 }
@@ -159,7 +158,7 @@ compute_context() {
   local untracked_count
   untracked_count=$(git ls-files --others --exclude-standard | wc -l | tr -d ' ')
 
-  if git diff --quiet "$BASE_OID" -- && [ "$untracked_count" = "0" ]; then
+  if git diff --no-ext-diff --quiet "$BASE_OID" -- && [ "$untracked_count" = "0" ]; then
     HAS_REVIEW_SURFACE=0
   else
     HAS_REVIEW_SURFACE=1
@@ -172,7 +171,6 @@ compute_context() {
       git diff --binary --no-ext-diff "$BASE_OID" --
       printf '\nuntracked-files:\n'
       git ls-files --others --exclude-standard -z \
-        | LC_ALL=C sort -z \
         | while IFS= read -r -d '' path; do
             [ -f "$path" ] || continue
             printf 'path:%s\n' "$path"

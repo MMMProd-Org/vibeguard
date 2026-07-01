@@ -14,7 +14,7 @@ BASH_BIN="$(command -v bash)"
 PASS=0; FAIL=0
 ok(){ if [ "$1" = "$2" ]; then PASS=$((PASS+1)); echo "  PASS $3"; else FAIL=$((FAIL+1)); echo "  FAIL $3 (got $1 want $2)"; fi; }
 
-# a repo with one base commit; $2=surface -> leave an uncommitted change.
+# a repo with one base commit; $1=surface -> leave an uncommitted change.
 mkrepo(){
   local d surface="${1:-}"; d=$(mktemp -d)
   git init -q "$d"; git -C "$d" config user.email t@t; git -C "$d" config user.name t
@@ -44,6 +44,14 @@ chk "$S" --write --review "r";        ok $? 2 "write: neither simplify nor -na -
 ( cd "$S" && PATH=/nonexistent "$BASH_BIN" "$CHK" </dev/null >/dev/null 2>&1 )
                                       ok $? 2 "checker: required tool missing -> fail-closed"
 
+# base resolution: a master-default repo (no main) anchors to master, not the
+# root commit (else a clean repo is wrongly seen as an unreviewed surface).
+M=$(mktemp -d); git init -q "$M"; git -C "$M" symbolic-ref HEAD refs/heads/master
+git -C "$M" config user.email t@t; git -C "$M" config user.name t
+printf '1\n' > "$M/a"; git -C "$M" add a; git -C "$M" commit -qm c1 >/dev/null 2>&1
+printf '2\n' > "$M/a"; git -C "$M" add a; git -C "$M" commit -qm c2 >/dev/null 2>&1
+chk "$M";                             ok $? 0 "check: clean master-default repo -> allow (base=master, not root)"
+
 echo "-- hook --"
 H=$(mkrepo surface)
 push "$H" "ls -la";                   ok $? 0 "hook: non-push command -> allow"
@@ -58,6 +66,15 @@ push "$NG";                           ok $? 0 "hook: push from non-repo cwd -> a
 push "$H" 'rg "git push" .';          ok $? 0 "hook: literal 'git push' in a search -> allow"
 CL=$(mkrepo)
 push "$CL";                           ok $? 0 "hook: push + clean repo (no surface) -> allow"
+
+echo "-- hook: push target resolution --"
+HC=$(mkrepo surface); A=$(mkrepo)
+push "$A" "git -C $HC push origin HEAD";  ok $? 2 "hook: git -C <surface repo> push (cwd clean) -> BLOCK (gates target not cwd)"
+push "$HC" "git -c user.name=x push";     ok $? 2 "hook: git -c k=v push (global opt before push) -> detected, BLOCK"
+push "$HC" "git help push";               ok $? 0 "hook: git help push (push is an arg) -> allow"
+push "$A" "git --git-dir=$HC/.git push";  ok $? 2 "hook: push via --git-dir -> fail-closed BLOCK"
+NG2=$(mktemp -d)
+push "$A" "git -C $NG2 push";             ok $? 2 "hook: git -C <non-repo> push -> fail-closed BLOCK"
 
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

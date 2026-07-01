@@ -141,10 +141,11 @@ an explicit not-applicable reason) over the *current* diff:
 The receipt is a small local file (`.git/agent-review-gate/latest.env`) tied to a
 hash of the exact diff, so it is invalidated the moment the code changes or after
 24h -- you cannot mint one, keep editing, and still push. To mint it after
-reviewing, run the command the block prints:
+reviewing, run the command the block prints (swap in `--simplify-na "<reason>"`
+when a simplify pass genuinely does not apply):
 
 ```bash
-.claude/hooks/check-agent-review-gate.sh --write --review "<summary>" --simplify-na "<reason>"
+.claude/hooks/check-agent-review-gate.sh --write --review "<summary>" --simplify "<summary>"
 ```
 
 It is opinionated, **off by default**, and wired for **Claude Code** only. It
