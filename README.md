@@ -190,6 +190,27 @@ does not use husky, or `pre-push` is present, nothing changes. Like the other
 opt-ins it is a seatbelt: an obfuscated command degrades to a skipped check, never
 a false block.
 
+## Want a paper trail before merging bot-reviewed PRs? (optional)
+
+If you use a review bot (CodeRabbit, Qodo, Copilot, ...) and want confirmation
+you have seen its latest feedback before a PR merge, install the **merge-ack gate**.
+It blocks a `gh pr merge` until a fresh local acknowledgement matches the current
+bot review threads on that PR:
+
+```bash
+/path/to/vibeguard/install.sh --with-merge-ack
+```
+
+Run `check-merge-ack.sh <PR>` to write the ack -- it hashes the current thread IDs
+and saves the result locally. The next merge on that PR goes through. If the bot
+posts new feedback afterwards, the thread list changes, the hash no longer matches,
+and the gate re-blocks. One gap: if a bot edits an existing comment in place rather
+than adding a new thread, the hash does not change and the gate will not re-block.
+
+It is **off by default** and wired for **Claude Code** only. Like the other opt-ins,
+it is a seatbelt -- fail-open: if `gh` is unavailable or the PR cannot be resolved,
+the merge is allowed through.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -217,6 +238,7 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | Review-receipt gate — require a local code-review receipt before push | shipped (opt-in) |
 | Agent issue backlog -- file de-duplicated GitHub issues for out-of-scope findings | shipped (helper script) |
 | husky pre-push presence guard -- block a push when `.husky/pre-push` is missing | shipped (opt-in) |
+| Merge-ack gate -- block a PR merge until local ack matches current bot threads | shipped (opt-in) |
 | Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
 
 The v2 guardrails are **not** installed by default: they assume a GitHub PR workflow
