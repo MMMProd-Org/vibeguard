@@ -73,7 +73,7 @@ if [ -z "$_pf" ] && command -v git >/dev/null 2>&1; then
   [ -n "$_root" ] && [ -f "$_root/.vibeguard/merge-policy.json" ] && _pf="$_root/.vibeguard/merge-policy.json"
 fi
 if [ -n "$_pf" ] && [ -f "$_pf" ]; then
-  if _p=$(jq -c . "$_pf" 2>/dev/null); then POLICY="$_p"
+  if _p=$(jq -cs 'if length==1 then .[0] else error end' -- "$_pf" 2>/dev/null); then POLICY="$_p"
   else echo "merge-state: ignoring invalid policy '$_pf' (bad JSON); using defaults." >&2; fi
 fi
 # Coerce the policy SHAPE (not just its JSON syntax): a valid-but-wrong-typed policy

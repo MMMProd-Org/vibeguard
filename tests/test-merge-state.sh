@@ -262,5 +262,19 @@ POL=$(mkpol '{"action_labels":{"ready":"ship"}}')
 OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
 ok "$(na "$OUT")" ready "action_labels {ready:ship} ignored -> next_action stays ready"
 
+# a policy path starting with '-' must still load (jq -- guard, no option injection)
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+DASHDIR=$(mktemp -d); printf '%s' '{"action_labels":{"fix_ci":"ci_red"}}' >"$DASHDIR/-dash.json"
+OUT=$( cd "$DASHDIR" && VIBEGUARD_MERGE_POLICY="-dash.json" PATH="$D:$PATH" bash "$SCRIPT" 5 2>/dev/null )
+ok "$(na "$OUT")" ci_red "policy path starting with '-' still loads (jq --)"
+
+# a multi-document policy file must fail-soft to defaults, not brick (Codex P2)
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+MULTIPOL=$(mkpol '{"action_labels":{"fix_ci":"ci_red"}}
+{}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$MULTIPOL" run "$D" 5); RC=$?
+ok "$RC" 0 "multi-document policy -> exit 0 (fail-soft)"
+ok "$(na "$OUT")" fix_ci "multi-document policy -> defaults (fix_ci, not ci_red)"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
