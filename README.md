@@ -71,6 +71,7 @@ The core above is everything a solo vibe-coder needs. Everything below is **off 
 | Get a paper trail before merging bot-reviewed PRs | `install.sh --with-merge-ack` |
 | Get a read-only snapshot of a PR's merge state | `scripts/merge-state.sh` (helper) |
 
+<a id="want-tighter-control-optional"></a>
 <details>
 <summary><strong>Narrow writes to specific folders inside your project</strong></summary>
 
@@ -84,6 +85,7 @@ Now the AI can only write inside `src/` and `tests/`. Everything else is blocked
 
 </details>
 
+<a id="running-several-ai-agents-at-once-optional"></a>
 <details>
 <summary><strong>Run several AI agents at once (one worktree each)</strong></summary>
 
@@ -101,6 +103,7 @@ default because a single agent in a single repo does not need it.
 
 </details>
 
+<a id="using-a-code-review-bot-optional"></a>
 <details>
 <summary><strong>Block a merge until a review bot's threads are resolved</strong></summary>
 
@@ -122,6 +125,7 @@ fail-open**: if you use no review bot, or `gh` is unavailable, it does nothing.
 
 </details>
 
+<a id="worried-about-your-hooks-being-silently-bypassed-optional"></a>
 <details>
 <summary><strong>Block a push that bypasses your git hooks</strong></summary>
 
@@ -142,6 +146,7 @@ default, and (like the other opt-ins) wired for **Claude Code** only.
 
 </details>
 
+<a id="want-pull-requests-to-start-as-drafts-optional"></a>
 <details>
 <summary><strong>Make pull requests start as drafts</strong></summary>
 
@@ -161,6 +166,7 @@ and, like the other opt-ins, is wired for **Claude Code** only.
 
 </details>
 
+<a id="want-a-code-review-receipt-before-every-push-optional"></a>
 <details>
 <summary><strong>Require a code-review receipt before every push</strong></summary>
 
@@ -189,6 +195,7 @@ audit-visible bypass (`SKIP_REVIEW_GATE=1`) for the rare case the gate is wrong.
 
 </details>
 
+<a id="want-an-agent-to-file-findings-without-spamming-issues-optional"></a>
 <details>
 <summary><strong>Let an agent file findings without spamming issues</strong></summary>
 
@@ -212,6 +219,7 @@ This is a **helper you invoke**, not an install-time hook -- there is nothing to
 
 </details>
 
+<a id="worried-you-deleted-a-git-hook-you-rely-on-optional"></a>
 <details>
 <summary><strong>Block a push when a husky pre-push hook went missing</strong></summary>
 
@@ -232,6 +240,7 @@ a false block.
 
 </details>
 
+<a id="want-a-paper-trail-before-merging-bot-reviewed-prs-optional"></a>
 <details>
 <summary><strong>Get a paper trail before merging bot-reviewed PRs</strong></summary>
 
@@ -253,6 +262,7 @@ the merge is allowed through.
 
 </details>
 
+<a id="want-a-read-only-snapshot-of-a-prs-merge-state-optional"></a>
 <details>
 <summary><strong>Get a read-only snapshot of a PR's merge state</strong></summary>
 
