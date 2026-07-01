@@ -16,7 +16,7 @@ cat > "$FAKEBIN/gh" <<'GH'
 if [ "$1" = "auth" ] && [ "$2" = "status" ]; then [ "${FAKE_GH_AUTH:-ok}" = "ok" ]; exit $?; fi
 if [ "$1" = "issue" ]; then
   case "$2" in
-    list)   printf '%s' "${FAKE_GH_LIST:-[]}"; exit 0 ;;
+    list)   [ -n "${FAKE_GH_LIST_NOISE:-}" ] && echo "warning: noise on stderr" >&2; printf '%s' "${FAKE_GH_LIST:-[]}"; exit 0 ;;
     create) if [ "${FAKE_GH_CREATE:-ok}" = "ok" ]; then echo "https://example/issues/99"; exit 0; else echo boom >&2; exit 1; fi ;;
     comment) exit 0 ;;
   esac
@@ -67,6 +67,10 @@ D=$(mktemp -d); mkbody > "$D/body.md"
 ( cd "$D" && env PATH="$FAKEBIN:$PATH" FAKE_GH_LIST='[]' "$BASH_BIN" "$SCRIPT" --meta "t" "agent-finding" body.md story1 >/dev/null 2>&1 )
 ok $? 0 "meta mode -> filed (0)"
 if [ -f "$D/.agent-backlog/session-story1.meta" ]; then r=0; else r=1; fi; ok "$r" 0 "meta mode wrote the .meta marker"
+
+# 9. stderr noise on `gh issue list` must not corrupt the JSON parse (stdout only).
+D=$(mktemp -d); mkbody > "$D/body.md"
+run "$D" story1 FAKE_GH_LIST='[]' FAKE_GH_LIST_NOISE=1;  ok $? 0  "gh stderr noise on list -> still filed (0), JSON intact"
 
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

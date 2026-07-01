@@ -30,10 +30,10 @@ if [[ "${1:-}" == "--meta" ]]; then
     shift
 fi
 
-TITLE="${1:?title requis}"
-LABELS="${2:?labels requis}"
-BODY_FILE="${3:?body file requis}"
-STORY_ID="${4:?story id requis}"
+TITLE="${1:?title required}"
+LABELS="${2:?labels required}"
+BODY_FILE="${3:?body-file required}"
+STORY_ID="${4:?story-id required}"
 
 if [[ ! "$STORY_ID" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     echo "ERROR: invalid STORY_ID '$STORY_ID' (allowed: a-zA-Z0-9_-)" >&2
@@ -52,7 +52,7 @@ mkdir -p "$STATE_DIR" "backlog/pending"
 fallback_save() {
     local reason="$1"
     local fb
-    fb="backlog/pending/$(date +%Y%m%d-%H%M%S)-${STORY_ID}.md"
+    fb="backlog/pending/$(date -u +%Y%m%d-%H%M%S)-${STORY_ID}.md"
     {
         echo "# $TITLE"
         echo ""
@@ -161,6 +161,7 @@ fi
 
 # --- 4. gh availability (graceful degradation) ---
 command -v gh >/dev/null 2>&1 || fallback_save "gh not installed"
+command -v jq >/dev/null 2>&1 || fallback_save "jq not installed"
 gh auth status >/dev/null 2>&1 || fallback_save "gh not authenticated"
 
 # --- 5. loc-hash dedup key ---
@@ -184,11 +185,11 @@ list_output=$(gh issue list \
     --state open \
     --search "\"loc-hash: $LOC_HASH\" in:body" \
     --limit "$LIST_LIMIT" \
-    --json number 2>&1)
+    --json number 2>/dev/null)
 list_exit=$?
 
 if [[ $list_exit -ne 0 ]]; then
-    fallback_save "gh issue list failed (exit=$list_exit): $list_output"
+    fallback_save "gh issue list failed (exit=$list_exit)"
 fi
 
 existing=$(echo "$list_output" | jq -r '.[0].number // empty' 2>/dev/null) || \
