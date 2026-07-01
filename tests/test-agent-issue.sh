@@ -72,5 +72,19 @@ if [ -f "$D/.agent-backlog/session-story1.meta" ]; then r=0; else r=1; fi; ok "$
 D=$(mktemp -d); mkbody > "$D/body.md"
 run "$D" story1 FAKE_GH_LIST='[]' FAKE_GH_LIST_NOISE=1;  ok $? 0  "gh stderr noise on list -> still filed (0), JSON intact"
 
+# 10. dedup wins over cap: at cap AND a duplicate -> comment (10), not CAP (30).
+D=$(mktemp -d); mkbody > "$D/body.md"; mkdir -p "$D/.agent-backlog"; printf '4' > "$D/.agent-backlog/session-story1.count"
+run "$D" story1 FAKE_GH_LIST='[{"number":42}]';       ok $? 10 "at cap but a duplicate -> dedup comment (10), not cap (30)"
+
+# 11. state anchored to the repo ROOT, not the CWD subdir.
+G=$(mktemp -d); git init -q "$G"; mkdir -p "$G/sub"; mkbody > "$G/sub/body.md"
+( cd "$G/sub" && env PATH="$FAKEBIN:$PATH" FAKE_GH_LIST='[]' "$BASH_BIN" "$SCRIPT" t agent-finding body.md story1 >/dev/null 2>&1 )
+if [ -f "$G/.agent-backlog/session-story1.count" ]; then r=0; else r=1; fi; ok "$r" 0 "state anchored to repo root"
+if [ -f "$G/sub/.agent-backlog/session-story1.count" ]; then r=1; else r=0; fi; ok "$r" 0 "no state left under the subdir"
+
+# 12. frontmatter must be top-anchored (first --- at line 1).
+D=$(mktemp -d); printf '%s\n' "intro text" "---" "type: bug" "files:" "  - path: x" "    lines: 1" "---" > "$D/body.md"
+run "$D" story1 FAKE_GH_LIST='[]';                    ok $? 20 "frontmatter not at line 1 -> fallback (20)"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

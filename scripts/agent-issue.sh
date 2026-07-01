@@ -42,17 +42,21 @@ fi
 
 MAX_NORMAL=4
 LIST_LIMIT=1000
-STATE_DIR=".agent-backlog"
+# Anchor state to the repo root so `../scripts/agent-issue.sh` from a subdir uses
+# the SAME .agent-backlog (else dedup silently splits per working directory).
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+STATE_DIR="$ROOT/.agent-backlog"
 COUNT_FILE="$STATE_DIR/session-${STORY_ID}.count"
 META_FILE="$STATE_DIR/session-${STORY_ID}.meta"
 LOCK_DIR="$STATE_DIR/lock-${STORY_ID}"
+PENDING_DIR="$ROOT/backlog/pending"
 
-mkdir -p "$STATE_DIR" "backlog/pending"
+mkdir -p "$STATE_DIR" "$PENDING_DIR"
 
 fallback_save() {
     local reason="$1"
     local fb
-    fb="backlog/pending/$(date -u +%Y%m%d-%H%M%S)-${STORY_ID}.md"
+    fb="$PENDING_DIR/$(date -u +%Y%m%d-%H%M%S)-${STORY_ID}.md"
     {
         echo "# $TITLE"
         echo ""
@@ -105,8 +109,11 @@ trap cleanup_lock EXIT
 yaml_start=$(grep -n '^---$' "$BODY_FILE" | head -1 | cut -d: -f1)
 yaml_end=$(grep -n '^---$' "$BODY_FILE" | sed -n '2p' | cut -d: -f1)
 
-if [[ -z "$yaml_start" || -z "$yaml_end" ]]; then
-    fallback_save "YAML frontmatter missing (need the --- delimiters)"
+if [[ "$yaml_start" != "1" ]]; then
+    fallback_save "YAML frontmatter must start at line 1 (top-anchored)"
+fi
+if [[ -z "$yaml_end" ]]; then
+    fallback_save "YAML frontmatter missing its closing --- delimiter"
 fi
 
 yaml_block=$(sed -n "${yaml_start},${yaml_end}p" "$BODY_FILE")
@@ -137,34 +144,12 @@ while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     sleep 1
 done
 
-# --- 3. Cap by mode ---
-if [[ $META_MODE -eq 1 ]]; then
-    if [[ -f "$META_FILE" ]]; then
-        echo "CAP_OVERFLOW: meta already created for $STORY_ID (see $META_FILE)" >&2
-        exit 30
-    fi
-else
-    current_count=0
-    if [[ -f "$COUNT_FILE" ]]; then
-        raw=$(cat "$COUNT_FILE" 2>/dev/null | tr -d '[:space:]')
-        if [[ "$raw" =~ ^[0-9]+$ ]]; then
-            current_count="$raw"
-        else
-            echo "WARNING: corrupt counter for $STORY_ID, reset to 0" >&2
-            current_count=0
-        fi
-    fi
-    if [[ $current_count -ge $MAX_NORMAL ]]; then
-        cap_overflow
-    fi
-fi
-
-# --- 4. gh availability (graceful degradation) ---
+# --- 3. gh availability (graceful degradation) ---
 command -v gh >/dev/null 2>&1 || fallback_save "gh not installed"
 command -v jq >/dev/null 2>&1 || fallback_save "jq not installed"
 gh auth status >/dev/null 2>&1 || fallback_save "gh not authenticated"
 
-# --- 5. loc-hash dedup key ---
+# --- 4. loc-hash dedup key ---
 if [[ $META_MODE -eq 1 ]]; then
     LOC_HASH=$(printf 'META|%s' "$STORY_ID" | sha256_12)
 else
@@ -179,7 +164,7 @@ else
     LOC_HASH=$(printf '%s' "$hash_input" | sha256_12)
 fi
 
-# --- 6. Initial duplicate check via search ---
+# --- 5. Initial duplicate check via search ---
 list_output=$(gh issue list \
     --label "agent-finding" \
     --state open \
@@ -204,6 +189,30 @@ if [[ -n "$existing" ]]; then
     fi
     echo "DUPLICATE comment added on #$existing"
     exit 10
+fi
+
+# --- 6. Cap NEW findings only -- a duplicate of an existing issue already exited
+#         above, so a re-detection keeps de-duplicating even past the cap. ---
+if [[ $META_MODE -eq 1 ]]; then
+    if [[ -f "$META_FILE" ]]; then
+        echo "CAP_OVERFLOW: meta already created for $STORY_ID (see $META_FILE)" >&2
+        exit 30
+    fi
+    current_count=0
+else
+    current_count=0
+    if [[ -f "$COUNT_FILE" ]]; then
+        raw=$(cat "$COUNT_FILE" 2>/dev/null | tr -d '[:space:]')
+        if [[ "$raw" =~ ^[0-9]+$ ]]; then
+            current_count="$raw"
+        else
+            echo "WARNING: corrupt counter for $STORY_ID, reset to 0" >&2
+            current_count=0
+        fi
+    fi
+    if [[ $current_count -ge $MAX_NORMAL ]]; then
+        cap_overflow
+    fi
 fi
 
 # --- 7. Inject hash + create ---
