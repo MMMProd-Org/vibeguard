@@ -12,7 +12,8 @@ They are tracked here so the roadmap and the de-coupling work are explicit.
 > **lite** PR merge-triage gate (`--with-merge-triage`, native thread resolution),
 > draft-mode (`--with-draft-mode`), review-receipt (`--with-review-receipt`),
 > husky-guard (`--with-husky-guard`), a local hashed **merge-ack**
-> (`--with-merge-ack`, the terminal-first signed-ack), and the **merge-state
+> (`--with-merge-ack`, a terminal-first hash-based ack — not a cryptographic
+> signature), and the **merge-state
 > engine** as a read-only helper (`scripts/merge-state.sh`). The rows still marked
 > deferred below (merge-triage full, bot-thread lib, merge-queue CI) remain v2.
 
@@ -20,7 +21,7 @@ They are tracked here so the roadmap and the de-coupling work are explicit.
 
 | Component | What it does | Why it is advanced |
 | --- | --- | --- |
-| PR merge-triage (full) | Policy-routing + signed-ack version (a policy generator, an ack store, and a byte-identical bot-pattern hash) | Heavyweight, **still deferred**. The lite native-resolution gate shipped instead, and the terminal-first signed-ack half shipped separately as `--with-merge-ack` (#15). Only the full policy-routing engine remains. |
+| PR merge-triage (full) | Policy-routing + hash-based-ack version (a policy generator, an ack store, and a byte-identical bot-pattern hash) | Heavyweight, **still deferred**. The lite native-resolution gate shipped instead, and the terminal-first hash-based ack (a local sha256 acknowledgement, not a cryptographic signature) shipped separately as `--with-merge-ack` (#15). Only the full policy-routing engine remains. |
 | bot-thread fetch (lib) | Single source of truth for the reviewer-bot login pattern + thread hashing | Only useful as the shared library for the triage chain |
 | merge-state engine | Read-only merge-state dump + next-action recommendation + JSON policy | **shipped** as `scripts/merge-state.sh` (read-only helper, opt-in like `agent-issue.sh`; PRs #16–#18). Delivered lean as three slices — dump / next-action + blockers / optional policy — instead of a ~1000-line engine. |
 | draft-mode + review-receipt gates | Forces PRs to enter as Draft and requires a local review receipt before push | **shipped** as opt-ins `--with-draft-mode` (#11) and `--with-review-receipt` (#12); off by default because opinionated. |
