@@ -184,7 +184,7 @@ switch) -- the checks you expect at push time would otherwise silently not run:
 /path/to/vibeguard/install.sh --with-husky-guard
 ```
 
-It resolves the primary repo (so it also protects pushes from a linked worktree),
+It checks the working-tree root of the pushing repo (so a push from a linked worktree is judged by its own checkout),
 honours `git -C <path> push`, and is **off by default**, Claude-only. If the repo
 does not use husky, or `pre-push` is present, nothing changes. Like the other
 opt-ins it is a seatbelt: an obfuscated command degrades to a skipped check, never

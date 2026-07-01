@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Proves the opt-in husky-guard: blocks a push when the repo has .husky/ but
 # .husky/pre-push is missing; allows a repo without husky, one with pre-push, and
-# non-push / literal-mention commands; resolves the PRIMARY root from a worktree;
+# non-push / literal-mention commands; checks the pushing worktree's own root;
 # fail-OPEN on jq-absent.
 set -uo pipefail
 VG="$(cd "$(dirname "$0")/.." && pwd)"
