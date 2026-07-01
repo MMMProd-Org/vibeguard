@@ -2,7 +2,7 @@
 
 These guardrails are kept out of the **default** beginner install (several ship as opt-in flags). They
 target users who already run a GitHub pull-request workflow with a merge queue
-and bot reviewers (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor) — not the
+and bot reviewers (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor, custom) — not the
 zero-config vibe-coder audience the core is built for.
 
 They are tracked here so the roadmap and the de-coupling work are explicit.
@@ -13,8 +13,8 @@ They are tracked here so the roadmap and the de-coupling work are explicit.
 > draft-mode (`--with-draft-mode`), review-receipt (`--with-review-receipt`),
 > husky-guard (`--with-husky-guard`), a local hashed **merge-ack**
 > (`--with-merge-ack`, a terminal-first hash-based ack — not a cryptographic
-> signature), and the **merge-state
-> engine** as a read-only helper (`scripts/merge-state.sh`). The rows still marked
+> signature), and the **merge-state engine** as a read-only helper
+> (`scripts/merge-state.sh`). The rows still marked
 > deferred below (merge-triage full, bot-thread lib, merge-queue CI) remain v2.
 
 ## Advanced components (roadmap — shipped + still deferred)
