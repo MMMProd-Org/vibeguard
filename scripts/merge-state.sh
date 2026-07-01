@@ -24,13 +24,20 @@ usage(){ echo "usage: $0 <PR> [-R owner/repo]" >&2; }
 PR=""; REPO=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    -R|--repo) REPO="${2:-}"; shift; [ $# -gt 0 ] && shift ;;
+    -R|--repo)
+      REPO="${2:-}"
+      case "$REPO" in ''|-*) echo "merge-state: $1 requires an owner/repo value." >&2; exit 1 ;; esac
+      shift 2 ;;
     -R*)       REPO="${1#-R}"; REPO="${REPO#=}"; shift ;;  # glued -Rowner/repo or -R=owner/repo
     --repo=*)  REPO="${1#--repo=}"; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) [ -z "$PR" ] && PR="$1"; shift ;;
+    -h|--help) usage; exit 0 ;;                            # --help is not an error (exit 0)
+    -*)        echo "merge-state: unknown option '$1'." >&2; usage; exit 1 ;;
+    *) if [ -n "$PR" ]; then echo "merge-state: unexpected extra argument '$1' (one PR only)." >&2; usage; exit 1; fi
+       PR="$1"; shift ;;
   esac
 done
+# A non-empty repo must look like owner/repo (else -R swallowed the PR or got a typo).
+if [ -n "$REPO" ]; then case "$REPO" in */*) : ;; *) echo "merge-state: invalid repo '$REPO' (expected owner/repo)." >&2; exit 1 ;; esac; fi
 case "$PR" in ''|*[!0-9]*) usage; exit 1 ;; esac
 
 command -v jq >/dev/null 2>&1 || { echo "merge-state: jq required." >&2; exit 4; }

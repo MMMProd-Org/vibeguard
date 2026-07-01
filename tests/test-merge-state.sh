@@ -82,6 +82,14 @@ RC=0; run "$D"     >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "missing PR -> exit 1"
 Dga=$(mktemp -d); ln -s "$(command -v jq)" "$Dga/jq"; RC=0; PATH="$Dga" "$BASH" "$SCRIPT" 5 >/dev/null 2>&1 || RC=$?; ok "$RC" 4 "gh absent (jq present) -> exit 4"
 Dgh=$(mktemp -d); cp "$D/gh" "$Dgh/gh"; RC=0; PATH="$Dgh" "$BASH" "$SCRIPT" 5 >/dev/null 2>&1 || RC=$?; ok "$RC" 4 "jq absent -> exit 4"
 
+# strict arg validation (QODO1/QODO2/Copilot): extra positional, bad -R, unknown flag, --help
+RC=0; run "$D" 5 6      >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "extra positional arg -> exit 1"
+RC=0; run "$D" -R 5     >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R 5 (no slash) -> invalid repo exit 1"
+RC=0; run "$D" 5 -R foo >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R foo (no slash) -> invalid repo exit 1"
+RC=0; run "$D" -R       >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "-R missing value -> exit 1"
+RC=0; run "$D" 5 --bogus >/dev/null 2>&1 || RC=$?; ok "$RC" 1 "unknown option -> exit 1"
+RC=0; run "$D" --help   >/dev/null 2>&1 || RC=$?; ok "$RC" 0 "--help -> exit 0 (not an error)"
+
 # paginate: gh --paginate concatenates pages; jq -rs must flatten both -> count 2
 pv '[]' >"$PVF"
 { threads "[$(node false 'coderabbit[bot]')]"; threads "[$(node false 'qodo[bot]')]"; } >"$THF"
