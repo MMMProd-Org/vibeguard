@@ -9,6 +9,9 @@ set -uo pipefail
 # Otherwise allow. Fail-OPEN: not a merge, SKIP, no jq/gh, unresolved PR, checker
 # absent, or any checker exit != 2 -> allow. Seatbelt, not a vault.
 #   bypass: VIBEGUARD_SKIP_MERGE_ACK=1 ; mint ack: check-merge-ack.sh <PR>
+#   SCOPE (accepted, mirrors merge-triage-lite): a slash-containing branch selector
+#   (feature/foo) is treated like an owner/repo token and is NOT resolved as the selector;
+#   it degrades to the current-branch PR or fail-open. Use the PR number for such branches.
 
 PAYLOAD=""; [ -t 0 ] || PAYLOAD=$(cat 2>/dev/null || true)
 [ "${VIBEGUARD_SKIP_MERGE_ACK:-0}" = "1" ] && exit 0
