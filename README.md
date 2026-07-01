@@ -127,6 +127,31 @@ It is opinionated and assumes a GitHub PR workflow, so it is **off by default**.
 It only inspects `gh` in command position (a literal `rg "gh pr create"` is fine)
 and, like the other opt-ins, is wired for **Claude Code** only.
 
+## Want a code-review receipt before every push? (optional)
+
+If you want a hard stop against pushing code straight from dev without a review
+pass, install the **review-receipt gate**. It intercepts a push and blocks it
+until a fresh receipt proves a code-review ran (plus a simplify/distill pass, or
+an explicit not-applicable reason) over the *current* diff:
+
+```bash
+/path/to/vibeguard/install.sh --with-review-receipt
+```
+
+The receipt is a small local file (`.git/agent-review-gate/latest.env`) tied to a
+hash of the exact diff, so it is invalidated the moment the code changes or after
+24h -- you cannot mint one, keep editing, and still push. To mint it after
+reviewing, run the command the block prints (swap in `--simplify-na "<reason>"`
+when a simplify pass genuinely does not apply):
+
+```bash
+.claude/hooks/check-agent-review-gate.sh --write --review "<summary>" --simplify "<summary>"
+```
+
+It is opinionated, **off by default**, and wired for **Claude Code** only. It
+fails open on anything that is not a clearly-detected push, and exposes an
+audit-visible bypass (`SKIP_REVIEW_GATE=1`) for the rare case the gate is wrong.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -151,7 +176,7 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | Generic bot-review support (CodeRabbit, Qodo, Copilot, Greptile, Sourcery, Vercel, Cursor, custom) | shipped (opt-in) |
 | hooksPath push guard — block a push when the local `core.hooksPath` bypasses your hooks | shipped (opt-in) |
 | Draft-mode gate — `gh pr create` must be `--draft`; `gh pr ready` needs an explicit ack | shipped (opt-in) |
-| Review-receipt gate — require a local code-review receipt before push | v2, opt-in |
+| Review-receipt gate — require a local code-review receipt before push | shipped (opt-in) |
 | Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
 
 The v2 guardrails are **not** installed by default: they assume a GitHub PR workflow
