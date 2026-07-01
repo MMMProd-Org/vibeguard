@@ -86,5 +86,14 @@ if [ -f "$G/sub/.agent-backlog/session-story1.count" ]; then r=1; else r=0; fi; 
 D=$(mktemp -d); printf '%s\n' "intro text" "---" "type: bug" "files:" "  - path: x" "    lines: 1" "---" > "$D/body.md"
 run "$D" story1 FAKE_GH_LIST='[]';                    ok $? 20 "frontmatter not at line 1 -> fallback (20)"
 
+# 13. lock hygiene: a normal run releases its OWN lock; a lock we never acquired
+#     (another process's) must survive our early exit (trap guarded by LOCK_HELD).
+D=$(mktemp -d); mkbody > "$D/body.md"
+run "$D" story1 FAKE_GH_LIST='[]'
+if [ -d "$D/.agent-backlog/lock-story1" ]; then r=1; else r=0; fi; ok "$r" 0 "own lock released after a normal run"
+D=$(mktemp -d); printf 'no frontmatter\n' > "$D/body.md"; mkdir -p "$D/.agent-backlog/lock-story1"
+run "$D" story1;                                      ok $? 20 "early exit with a foreign lock present -> fallback (20)"
+if [ -d "$D/.agent-backlog/lock-story1" ]; then r=0; else r=1; fi; ok "$r" 0 "a lock we never acquired survives our early exit"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

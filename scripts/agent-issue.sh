@@ -100,7 +100,8 @@ check_issue_exists_by_hash() {
     return 0
 }
 
-cleanup_lock() { rmdir "$LOCK_DIR" 2>/dev/null || true; }
+LOCK_HELD=0
+cleanup_lock() { [[ "$LOCK_HELD" == "1" ]] && rmdir "$LOCK_DIR" 2>/dev/null || true; }
 trap cleanup_lock EXIT
 
 # --- 1. Frontmatter validation ---
@@ -143,6 +144,7 @@ while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     fi
     sleep 1
 done
+LOCK_HELD=1
 
 # --- 3. gh availability (graceful degradation) ---
 command -v gh >/dev/null 2>&1 || fallback_save "gh not installed"
