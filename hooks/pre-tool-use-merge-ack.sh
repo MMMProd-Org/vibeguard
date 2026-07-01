@@ -30,7 +30,7 @@ case "$_sub" in "pr merge") : ;; *) exit 0 ;; esac
 [ -n "${VIBEGUARD_ACK_THREADS_JSON:-}" ] || command -v gh >/dev/null 2>&1 || exit 0
 
 REPO=$(printf '%s' "$CMD" | grep -oE '(-R|--repo)[=[:space:]]?[^[:space:]]+/[^[:space:]]+' | head -1 | sed -E 's/^(-R|--repo)[=[:space:]]?//' || true)
-after=$(printf '%s' "$CMD" | sed -E 's/^.*pr merge[[:space:]]*//')
+after=${CMD#*pr merge}   # non-greedy: strip through the FIRST "pr merge" (the subcommand), not a later flag value
 PR=""; BRANCH=""; skip_next=0
 # shellcheck disable=SC2086
 for tok in $after; do

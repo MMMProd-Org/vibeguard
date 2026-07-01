@@ -85,7 +85,7 @@ ok "$([ -f "$RWRITE/.agent-backlog/triaged-prs/88.ack" ] && echo yes || echo no)
 STUBFAIL=$(mktemp -d); printf '#!/usr/bin/env bash\nexit 1\n' > "$STUBFAIL/gh"; chmod +x "$STUBFAIL/gh"
 RQF=$(mkrepo)
 feed_fail(){ local dir="$1" cmd="$2"; printf '%s' "$(jq -nc --arg c "$cmd" '{tool_name:"Bash",tool_input:{command:$c}}')" | ( cd "$dir" && PATH="$STUBFAIL:$PATH" VIBEGUARD_ACK_THREADS_JSON="$THREADS" "$BASH_BIN" "$HOOK" >/dev/null 2>&1 ); }
-feed_fail "$RQF" 'gh pr merge 42 --body "all clear"';  ok $? 2 "hook: explicit PR + quoted flag, gh fails -> still BLOCK (no false fallback)"
+feed_fail "$RQF" 'gh pr merge 42 --body "pr merge note"';  ok $? 2 "hook: explicit PR + quoted flag containing pr-merge text, gh fails -> still BLOCK (non-greedy strip)"
 
 echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
