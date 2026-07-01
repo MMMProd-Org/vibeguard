@@ -51,6 +51,7 @@ And the supporting pieces:
 - `install.sh` — wires the guards into Claude Code and Codex for you. It backs up anything it changes and is safe to re-run.
 - `scripts/do-release.sh` — a small helper for maintainers to publish a GitHub release.
 - `scripts/agent-issue.sh` — files **de-duplicated** GitHub issues for out-of-scope findings an agent surfaces (optional helper; see below).
+- `scripts/merge-state.sh` — prints a read-only JSON snapshot of a PR's merge readiness (CI, review, unresolved bot threads) plus a recommended next action (optional helper; see below).
 - `advanced/` — notes on optional, heavier features (automatic pull-request review, isolated workspaces) that are **not** installed by default.
 
 ## Want tighter control? (optional)
@@ -208,6 +209,24 @@ It is **off by default** and wired for **Claude Code** only. Like the other opt-
 it is a seatbelt -- fail-open: if `gh` is unavailable or the PR cannot be resolved,
 the merge is allowed through.
 
+## Want a read-only snapshot of a PR's merge state? (optional)
+
+`scripts/merge-state.sh <PR>` prints a stable JSON snapshot of a pull request's merge
+readiness -- `mergeable` state, CI `pass`/`fail`/`pending`, review decision, and the count
+of unresolved review-bot threads -- plus an ordered list of `blockers` and a single
+recommended `next_action` (`fix_ci`, `wait_ci`, `resolve_threads`, `ready`, ...):
+
+```bash
+scripts/merge-state.sh 42               # PR in the current repo
+scripts/merge-state.sh 42 -R owner/repo
+```
+
+It reads through `gh` (owner/repo auto-detected, no hardcoded default) and never blocks,
+mutates, or merges -- it only reports, so it is safe to run anytime. An optional
+`.vibeguard/merge-policy.json` (or `$VIBEGUARD_MERGE_POLICY`) can rename actions, disable
+gates, or override the bot pattern; a malformed policy is ignored. Like `agent-issue.sh`,
+this is a **helper you invoke**, not an install-time hook.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -236,6 +255,7 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | Agent issue backlog -- file de-duplicated GitHub issues for out-of-scope findings | shipped (helper script) |
 | husky pre-push presence guard -- block a push when `.husky/pre-push` is missing | shipped (opt-in) |
 | Merge-ack gate -- block a PR merge until local ack matches current bot threads | shipped (opt-in) |
+| Merge-state snapshot -- read-only JSON of a PR's merge readiness + recommended next action | shipped (helper script) |
 | Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
 
 The v2 guardrails are **not** installed by default: they assume a GitHub PR workflow
