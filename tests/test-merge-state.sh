@@ -243,5 +243,24 @@ pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; D=$(mkgh "$PVF
 OUT=$( cd "$AREPO" && PATH="$D:$PATH" bash "$SCRIPT" 5 2>/dev/null )
 ok "$(na "$OUT")" ci_red "auto-detect .vibeguard/merge-policy.json"
 
+# non-string action_labels value must be ignored (blockers/next_action stay string tokens)
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+for badlbl in '{"action_labels":{"fix_ci":5}}' '{"action_labels":{"fix_ci":false}}' '{"action_labels":{"fix_ci":["x"]}}'; do
+  POL=$(mkpol "$badlbl"); OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+  ok "$(na "$OUT")" fix_ci "non-string action_labels $badlbl -> ignored (fix_ci)"
+done
+# disabled_gates with mixed types drops only the valid string element
+pv '[{"conclusion":"FAILURE"},{"status":"IN_PROGRESS","conclusion":""}]' MERGEABLE CLEAN APPROVED >"$PVF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"disabled_gates":["wait_ci",5,{"a":1}]}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" fix_ci "disabled_gates mixed types -> string element applied"
+ok "$(bl "$OUT")" '["fix_ci"]' "disabled_gates mixed types -> only wait_ci dropped"
+
+# action_labels must not relabel the reserved "ready" SENTINEL KEY (Codex P2)
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"; D=$(mkgh "$PVF" "$THF")
+POL=$(mkpol '{"action_labels":{"ready":"ship"}}')
+OUT=$(VIBEGUARD_MERGE_POLICY="$POL" run "$D" 5)
+ok "$(na "$OUT")" ready "action_labels {ready:ship} ignored -> next_action stays ready"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]

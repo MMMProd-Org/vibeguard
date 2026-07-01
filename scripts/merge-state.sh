@@ -68,7 +68,7 @@ command -v gh >/dev/null 2>&1 || { echo "merge-state: gh required." >&2; exit 4;
 # ---- optional decision policy (needs jq) ----
 POLICY='{}'
 _pf="${VIBEGUARD_MERGE_POLICY:-}"
-if [ -z "$_pf" ]; then
+if [ -z "$_pf" ] && command -v git >/dev/null 2>&1; then
   _root=$(git rev-parse --show-toplevel 2>/dev/null || true)
   [ -n "$_root" ] && [ -f "$_root/.vibeguard/merge-policy.json" ] && _pf="$_root/.vibeguard/merge-policy.json"
 fi
@@ -83,9 +83,9 @@ fi
 POLICY=$(printf '%s' "$POLICY" | jq -c '
   (if type=="object" then . else {} end)
   | { bot_pattern:    (.bot_pattern    | if type=="string" then . else null end),
-      disabled_gates: (.disabled_gates | if type=="array"  then . else []   end),
+      disabled_gates: (.disabled_gates | if type=="array"  then map(select(type=="string")) else [] end),
       action_labels:  ((.action_labels | if type=="object" then . else {} end)
-                       | with_entries(select(.value != "ready"))) }' 2>/dev/null) || POLICY='{}'
+                       | with_entries(select((.value|type=="string") and .value != "ready" and .key != "ready"))) }' 2>/dev/null) || POLICY='{}'
 [ -n "$POLICY" ] || POLICY='{}'
 [ -n "$BOT_PATTERN" ] || BOT_PATTERN=$(printf '%s' "$POLICY" | jq -r '.bot_pattern // empty' 2>/dev/null)
 [ -n "$BOT_PATTERN" ] || BOT_PATTERN="$BOT_PATTERN_DEFAULT"
