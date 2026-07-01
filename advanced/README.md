@@ -16,7 +16,7 @@ They are tracked here so the roadmap and the de-coupling work are explicit.
 > engine** as a read-only helper (`scripts/merge-state.sh`). The rows still marked
 > deferred below (merge-triage full, bot-thread lib, merge-queue CI) remain v2.
 
-## Deferred components
+## Advanced components (roadmap — shipped + still deferred)
 
 | Component | What it does | Why it is advanced |
 | --- | --- | --- |
