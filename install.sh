@@ -26,6 +26,7 @@ WITH_TRIAGE=0
 WITH_HOOKSPATH=0
 WITH_DRAFT=0
 WITH_RECEIPT=0
+WITH_MERGE_ACK=0
 WITH_HUSKY=0
 TARGET=""
 TARGET_SET=0
@@ -39,8 +40,9 @@ while [ $# -gt 0 ]; do
       --with-hookspath-guard) WITH_HOOKSPATH=1; shift; continue ;;
       --with-draft-mode) WITH_DRAFT=1; shift; continue ;;
       --with-review-receipt) WITH_RECEIPT=1; shift; continue ;;
+      --with-merge-ack) WITH_MERGE_ACK=1; shift; continue ;;
       --with-husky-guard) WITH_HUSKY=1; shift; continue ;;
-      -h|--help) echo "Usage: ./install.sh [--with-worktree-lock] [--with-merge-triage] [--with-hookspath-guard] [--with-draft-mode] [--with-review-receipt] [--with-husky-guard] [--] [TARGET_REPO]"; exit 0 ;;
+      -h|--help) echo "Usage: ./install.sh [--with-worktree-lock] [--with-merge-triage] [--with-hookspath-guard] [--with-draft-mode] [--with-review-receipt] [--with-merge-ack] [--with-husky-guard] [--] [TARGET_REPO]"; exit 0 ;;
       -*) echo "vibeguard: unknown option $1" >&2; exit 1 ;;
     esac
   fi
@@ -95,6 +97,12 @@ fi
 # git-push and has no ordering dependency on the other Bash guards.
 if [ "$WITH_HUSKY" = "1" ]; then
   CLAUDE_HOOKS+=("pre-tool-use-husky-guard.sh:PreToolUse:Bash")
+fi
+# Opt-in merge-ack gate (Claude only). Appended: it gates `gh pr merge`
+# and has no ordering dependency on the other Bash guards. Its checker helper
+# (check-merge-ack.sh) is copied alongside it below.
+if [ "$WITH_MERGE_ACK" = "1" ]; then
+  CLAUDE_HOOKS+=("pre-tool-use-merge-ack.sh:PreToolUse:Bash")
 fi
 
 # register_hook <json-file> <command> <event> <matcher> [append|prepend]
@@ -154,6 +162,11 @@ done
 if [ "$WITH_RECEIPT" = "1" ]; then
   install_file "$VG_SRC/hooks/check-agent-review-gate.sh" "$TARGET/.claude/hooks/check-agent-review-gate.sh"
 fi
+# The merge-ack gate also ships a helper script (not a hook) that its hook
+# invokes as a sibling; copy it into the same dir.
+if [ "$WITH_MERGE_ACK" = "1" ]; then
+  install_file "$VG_SRC/hooks/check-merge-ack.sh" "$TARGET/.claude/hooks/check-merge-ack.sh"
+fi
 
 # Claude: merge into .claude/settings.json (back up once, only if it changes)
 SETTINGS="$TARGET/.claude/settings.json"
@@ -187,5 +200,6 @@ LOCK_NOTE=""
 [ "$WITH_HOOKSPATH" = "1" ] && LOCK_NOTE="$LOCK_NOTE + hookspath-guard (Claude)"
 [ "$WITH_DRAFT" = "1" ] && LOCK_NOTE="$LOCK_NOTE + draft-mode (Claude)"
 [ "$WITH_RECEIPT" = "1" ] && LOCK_NOTE="$LOCK_NOTE + review-receipt (Claude)"
+[ "$WITH_MERGE_ACK" = "1" ] && LOCK_NOTE="$LOCK_NOTE + merge-ack (Claude)"
 [ "$WITH_HUSKY" = "1" ] && LOCK_NOTE="$LOCK_NOTE + husky-guard (Claude)"
 echo "vibeguard: installed ${#HOOKS[@]} core hook(s)$LOCK_NOTE into $TARGET (Claude + Codex). Backups: *.vibeguard-bak.*"
