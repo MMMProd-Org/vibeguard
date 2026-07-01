@@ -50,6 +50,7 @@ And the supporting pieces:
 
 - `install.sh` — wires the guards into Claude Code and Codex for you. It backs up anything it changes and is safe to re-run.
 - `scripts/do-release.sh` — a small helper for maintainers to publish a GitHub release.
+- `scripts/agent-issue.sh` — files **de-duplicated** GitHub issues for out-of-scope findings an agent surfaces (optional helper; see below).
 - `advanced/` — notes on optional, heavier features (automatic pull-request review, isolated workspaces) that are **not** installed by default.
 
 ## Want tighter control? (optional)
@@ -152,6 +153,26 @@ It is opinionated, **off by default**, and wired for **Claude Code** only. It
 fails open on anything that is not a clearly-detected push, and exposes an
 audit-visible bypass (`SKIP_REVIEW_GATE=1`) for the rare case the gate is wrong.
 
+## Want an agent to file findings without spamming issues? (optional)
+
+When an AI agent notices something out of scope while working, `scripts/agent-issue.sh`
+files it as a GitHub issue **de-duplicated by location** -- the same finding never opens
+two issues. It fingerprints the finding (a `loc-hash` over the `type` / `file` / `line`
+frontmatter of the body) and, if an open `agent-finding` issue already carries that hash,
+comments on it instead of filing a new one:
+
+```bash
+scripts/agent-issue.sh "<title>" "agent-finding" <body-file.md> <story-id>
+```
+
+The body file needs a small YAML frontmatter (`type:`, plus a `files:` block of `- path:` /
+`lines:` entries -- those are what the hash is built from). It caps runaway filing at 4 issues
+per story (`--meta` groups beyond that) and **degrades gracefully**: if `gh` is missing or not
+signed in, the finding is saved under `backlog/pending/` instead of being lost. Local dedup
+state lives in `.agent-backlog/` (counters, locks); a ready `.gitignore` scaffold ships there.
+
+This is a **helper you invoke**, not an install-time hook -- there is nothing to wire up.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -177,6 +198,7 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | hooksPath push guard — block a push when the local `core.hooksPath` bypasses your hooks | shipped (opt-in) |
 | Draft-mode gate — `gh pr create` must be `--draft`; `gh pr ready` needs an explicit ack | shipped (opt-in) |
 | Review-receipt gate — require a local code-review receipt before push | shipped (opt-in) |
+| Agent issue backlog -- file de-duplicated GitHub issues for out-of-scope findings | shipped (helper script) |
 | Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
 
 The v2 guardrails are **not** installed by default: they assume a GitHub PR workflow

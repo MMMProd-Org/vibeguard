@@ -1,3 +1,4 @@
 *.vibeguard-bak.*
 *.full.ref
 .DS_Store
+backlog/pending/
