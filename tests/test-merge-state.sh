@@ -102,5 +102,72 @@ pv '[]' >"$PVF"
 Dpg=$(mkgh "$PVF" "$THF"); OUT=$(run "$Dpg" 5)
 ok "$(printf '%s' "$OUT"|jq -r '.unresolved_bot_threads')" 2 "paginate: threads across 2 pages both counted"
 
+
+# ================= PR-b: next_action + blockers + reason =================
+na(){ printf '%s' "$1" | jq -r '.next_action'; }
+bl(){ printf '%s' "$1" | jq -rc '.blockers'; }
+rs(){ printf '%s' "$1" | jq -r '.reason'; }
+
+# ready: clean, approved, ci pass, no threads
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE CLEAN APPROVED >"$PVF"; threads '[]' >"$THF"
+D=$(mkgh "$PVF" "$THF"); OUT=$(run "$D" 5)
+ok "$(na "$OUT")" ready "next_action: clean -> ready"
+ok "$(bl "$OUT")" '[]' "blockers: clean -> []"
+ok "$(rs "$OUT")" "clean, mergeable" "reason: clean"
+
+# fix_ci wins over pending; both listed as blockers
+pv '[{"conclusion":"FAILURE"},{"status":"IN_PROGRESS","conclusion":""}]' MERGEABLE CLEAN APPROVED >"$PVF"
+D=$(mkgh "$PVF" "$THF"); OUT=$(run "$D" 5)
+ok "$(na "$OUT")" fix_ci "next_action: failing check -> fix_ci"
+ok "$(bl "$OUT")" '["fix_ci","wait_ci"]' "blockers: fail+pending -> [fix_ci,wait_ci]"
+ok "$(rs "$OUT")" "1 failing check(s)" "reason: fix_ci count"
+
+# wait_ci only
+pv '[{"status":"IN_PROGRESS","conclusion":""}]' MERGEABLE CLEAN APPROVED >"$PVF"
+D=$(mkgh "$PVF" "$THF"); OUT=$(run "$D" 5); ok "$(na "$OUT")" wait_ci "next_action: pending -> wait_ci"
+
+# resolve_conflicts is highest priority even with failing ci
+pv '[{"conclusion":"FAILURE"}]' CONFLICTING DIRTY APPROVED >"$PVF"
+D=$(mkgh "$PVF" "$THF"); OUT=$(run "$D" 5)
+ok "$(na "$OUT")" resolve_conflicts "next_action: dirty -> resolve_conflicts (over fix_ci)"
+
+# draft / behind / unknown
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE DRAFT APPROVED >"$PVF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5); ok "$(na "$OUT")" mark_ready "next_action: draft -> mark_ready"
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE BEHIND APPROVED >"$PVF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5); ok "$(na "$OUT")" update_branch "next_action: behind -> update_branch"
+pv '[{"conclusion":"SUCCESS"}]' UNKNOWN UNKNOWN APPROVED >"$PVF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5); ok "$(na "$OUT")" wait_mergeability "next_action: unknown -> wait_mergeability"
+
+# resolve_threads (ci clean, threads>0) vs verify_threads (fetch null)
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE CLEAN APPROVED >"$PVF"
+threads "[$(node false 'coderabbit[bot]')]" >"$THF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5); ok "$(na "$OUT")" resolve_threads "next_action: unresolved thread -> resolve_threads"
+OUT=$(run "$(mkgh "$PVF" -)" 5); ok "$(na "$OUT")" verify_threads "next_action: null threads -> verify_threads"
+
+# co-blockers: pending + threads -> next=wait_ci, both listed
+pv '[{"status":"QUEUED","conclusion":""}]' MERGEABLE CLEAN APPROVED >"$PVF"
+threads "[$(node false 'qodo[bot]')]" >"$THF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5)
+ok "$(na "$OUT")" wait_ci "co-blockers: pending+threads -> next=wait_ci"
+ok "$(bl "$OUT")" '["wait_ci","resolve_threads"]' "co-blockers: [wait_ci,resolve_threads]"
+
+# review states (ci clean, no threads)
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE CLEAN REVIEW_REQUIRED >"$PVF"; threads '[]' >"$THF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5); ok "$(na "$OUT")" request_review "next_action: review required"
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE CLEAN CHANGES_REQUESTED >"$PVF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5); ok "$(na "$OUT")" address_changes "next_action: changes requested"
+
+
+# BLOCKED must never read as ready (branch protection not satisfied, no visible cause)
+pv '[{"conclusion":"SUCCESS"}]' MERGEABLE BLOCKED APPROVED >"$PVF"; threads '[]' >"$THF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5)
+ok "$(na "$OUT")" resolve_block "next_action: BLOCKED (no visible cause) -> resolve_block (NOT ready)"
+# a specific, actionable cause still wins over the generic block; block is listed last
+pv '[{"conclusion":"FAILURE"}]' MERGEABLE BLOCKED APPROVED >"$PVF"
+OUT=$(run "$(mkgh "$PVF" "$THF")" 5)
+ok "$(na "$OUT")" fix_ci "BLOCKED + failing ci -> fix_ci (specific cause wins)"
+ok "$(bl "$OUT")" '["fix_ci","resolve_block"]' "blockers: BLOCKED listed after the specific cause"
+
 echo ""; echo "=== RESULTS: $PASS pass, $FAIL fail ==="
 [ "$FAIL" -eq 0 ]
