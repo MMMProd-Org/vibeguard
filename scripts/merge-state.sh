@@ -36,8 +36,15 @@ while [ $# -gt 0 ]; do
        PR="$1"; shift ;;
   esac
 done
-# A non-empty repo must look like owner/repo (else -R swallowed the PR or got a typo).
-if [ -n "$REPO" ]; then case "$REPO" in */*) : ;; *) echo "merge-state: invalid repo '$REPO' (expected owner/repo)." >&2; exit 1 ;; esac; fi
+# A non-empty repo must be exactly owner/repo: one slash, both parts non-empty
+# (else -R swallowed the PR, or 'owner/repo/extra' would silently parse to owner+extra).
+if [ -n "$REPO" ]; then
+  case "$REPO" in
+    */*/*|/*|*/) echo "merge-state: invalid repo '$REPO' (expected owner/repo)." >&2; exit 1 ;;
+    */*)         : ;;
+    *)           echo "merge-state: invalid repo '$REPO' (expected owner/repo)." >&2; exit 1 ;;
+  esac
+fi
 case "$PR" in ''|*[!0-9]*) usage; exit 1 ;; esac
 
 command -v jq >/dev/null 2>&1 || { echo "merge-state: jq required." >&2; exit 4; }
