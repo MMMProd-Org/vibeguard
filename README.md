@@ -173,6 +173,23 @@ state lives in `.agent-backlog/` (counters, locks); a ready `.gitignore` scaffol
 
 This is a **helper you invoke**, not an install-time hook -- there is nothing to wire up.
 
+## Worried you deleted a git hook you rely on? (optional)
+
+If your repo uses [husky](https://typicode.github.io/husky/) for a `pre-push` hook,
+install the **husky-guard** so a push is blocked when `.husky/` exists but
+`.husky/pre-push` has gone missing (deleted, or never restored after a branch
+switch) -- the checks you expect at push time would otherwise silently not run:
+
+```bash
+/path/to/vibeguard/install.sh --with-husky-guard
+```
+
+It resolves the primary repo (so it also protects pushes from a linked worktree),
+honours `git -C <path> push`, and is **off by default**, Claude-only. If the repo
+does not use husky, or `pre-push` is present, nothing changes. Like the other
+opt-ins it is a seatbelt: an obfuscated command degrades to a skipped check, never
+a false block.
+
 ## Turning it off
 
 Everything vibeguard adds lives in `.claude/hooks/`, and anything it changed has a backup next to it (`*.vibeguard-bak.*`). To switch it off, remove the vibeguard lines from `.claude/settings.json`.
@@ -199,6 +216,7 @@ teams already running a pull-request + merge-queue workflow are planned for **v2
 | Draft-mode gate — `gh pr create` must be `--draft`; `gh pr ready` needs an explicit ack | shipped (opt-in) |
 | Review-receipt gate — require a local code-review receipt before push | shipped (opt-in) |
 | Agent issue backlog -- file de-duplicated GitHub issues for out-of-scope findings | shipped (helper script) |
+| husky pre-push presence guard -- block a push when `.husky/pre-push` is missing | shipped (opt-in) |
 | Merge-queue CI guardrails (`merge_group`) | v2, opt-in |
 
 The v2 guardrails are **not** installed by default: they assume a GitHub PR workflow
